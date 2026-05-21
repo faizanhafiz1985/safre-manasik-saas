@@ -1,0 +1,87 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+
+const logger = require('./config/logger');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
+
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const packageRoutes = require('./routes/packages');
+const bookingRoutes = require('./routes/bookings');
+const transportRoutes = require('./routes/transport');
+const cateringRoutes = require('./routes/catering');
+const voucherRoutes = require('./routes/vouchers');
+const paymentRoutes = require('./routes/payments');
+const hotelRoutes = require('./routes/hotels');
+const configRoutes = require('./routes/config');
+const dashboardRoutes = require('./routes/dashboard');
+const tenantRoutes = require('./routes/tenant');
+const superAdminRoutes = require('./routes/superAdmin');
+const reportRoutes = require('./routes/reports');
+const paymentGatewayRoutes = require('./routes/paymentGateway');
+
+const app = express();
+
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
+app.use(compression());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500, message: 'Too many requests' });
+app.use('/api', limiter);
+
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+app.use('/api/auth', authLimiter);
+
+app.get('/health', (req, res) => res.json({
+  status: 'ok',
+  timestamp: new Date(),
+  version: process.env.npm_package_version || '2.0.0-saas',
+  mode: process.env.NODE_ENV,
+}));
+
+app.use('/api/auth', authRoutes);
+app.use('/api/tenant', tenantRoutes);
+app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/payments/gateway', paymentGatewayRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/packages', packageRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/catering', cateringRoutes);
+app.use('/api/vouchers', voucherRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/hotels', hotelRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+app.use(notFound);
+app.use(errorHandler);
+
+// Only listen when run directly (not when required by tests)
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  const server = app.listen(PORT, () => {
+    logger.info(`Safre Manasik SaaS API running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+  });
+  const shutdown = (signal) => {
+    logger.info(`${signal} received. Shutting down gracefully...`);
+    server.close(() => { logger.info('HTTP server closed.'); process.exit(0); });
+    setTimeout(() => { logger.warn('Force exit after 10s'); process.exit(1); }, 10000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+module.exports = app;

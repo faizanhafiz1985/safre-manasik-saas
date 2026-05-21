@@ -1,0 +1,54 @@
+node_modules/
+.env
+.env.local
+.env.development
+.env.test
+!.env.production.example
+
+# Build outputs
+build/
+dist/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Logs / uploads / runtime
+backend/logs/
+backend/uploads/
+*.pid
+*.seed
+*.pid.lock
+
+# Test / dev artifacts
+coverage/
+.nyc_output/
+.playwright-mcp/
+*.png
+!frontend/public/*.png
+
+# Secrets
+proxy/ssl/
+*.pem
+*.key
+
+# Claude artefacts
+.claude/
+
+# Documents that aren't source-code
+ERPNext_Social_Media_Integration_Guide.html
+ERPNext_Social_Media_Integration_Guide.md
+ERPNext_Social_Media_Integration_Guide.pdf
+Safre Manasik Letterhead.html
+Safre_Manasik_SaaS_Roadmap.docx
+gen_final.js
+mk_word_final.ps1
+screenshots/
+
+# Local backups
+backups/

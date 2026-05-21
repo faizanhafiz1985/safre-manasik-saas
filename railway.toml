@@ -1,0 +1,13 @@
+# Root-level Railway monorepo config.
+# Railway auto-detects services from /backend and /frontend dirs.
+
+[build]
+# Railway will use each service's railway.json + Dockerfile
+
+[[services]]
+name = "backend"
+source = "backend"
+
+[[services]]
+name = "frontend"
+source = "frontend"

@@ -1,0 +1,24 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+!.env.production.example
+*.log
+logs/
+.vscode
+.idea
+.DS_Store
+coverage
+.nyc_output
+tests
+*.test.js
+README.md
+DEPLOYMENT.md
+ERPNext_Social_Media_Integration_Guide.*
+Safre Manasik Letterhead.html
+Safre_Manasik_SaaS_Roadmap.docx
+screenshots
+backups
+proxy/ssl

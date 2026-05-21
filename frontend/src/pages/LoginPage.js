@@ -1,0 +1,106 @@
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Box, Card, CardContent, TextField, Button, Typography, InputAdornment, IconButton, Alert, Divider } from '@mui/material';
+import { Email, Lock, Visibility, VisibilityOff } from '@mui/icons-material';
+import { useForm } from 'react-hook-form';
+import { useAuth } from '../context/AuthContext';
+
+export default function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { register, handleSubmit, formState: { errors } } = useForm();
+
+  const onSubmit = async (data) => {
+    setError(''); setLoading(true);
+    try {
+      const user = await login(data.email, data.password);
+      navigate(user.role === 'SUPER_ADMIN' ? '/super-admin' : '/dashboard');
+    }
+    catch (err) { setError(err.response?.data?.error || 'Invalid credentials. Please try again.'); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <Box sx={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(160deg, #0D2B1A 0%, #1B4B35 45%, #2E6B4F 100%)',
+      p: 2, position: 'relative', overflow: 'hidden',
+    }}>
+      <Box sx={{ position:'absolute', width:400, height:400, borderRadius:'50%', border:'1px solid rgba(201,162,39,0.15)', top:-100, left:-100 }} />
+      <Box sx={{ position:'absolute', width:300, height:300, borderRadius:'50%', border:'1px solid rgba(201,162,39,0.1)', bottom:-80, right:-80 }} />
+
+      <Box sx={{ width: '100%', maxWidth: 440, position: 'relative', zIndex: 1 }}>
+        <Box sx={{ textAlign: 'center', mb: 3 }}>
+          <Typography variant="h3" sx={{ color: '#C9A227', fontWeight: 800, letterSpacing: 1 }}>Safre Manasik</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
+            Multi-Tenant SaaS Platform
+          </Typography>
+        </Box>
+
+        <Card sx={{ borderRadius: 3, boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+          <Box sx={{ bgcolor: '#C9A227', py: 1.2, textAlign: 'center' }}>
+            <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 700, letterSpacing: 1.5, fontSize: '0.75rem' }}>
+              SECURE LOGIN PORTAL
+            </Typography>
+          </Box>
+
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h6" fontWeight={700} color="#1B4B35" gutterBottom>Welcome Back</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Sign in to your SaaS dashboard
+            </Typography>
+
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <TextField fullWidth label="Email Address" type="email" sx={{ mb: 2 }}
+                InputProps={{ startAdornment: <InputAdornment position="start"><Email fontSize="small" sx={{ color: '#1B4B35' }} /></InputAdornment> }}
+                error={!!errors.email} helperText={errors.email?.message}
+                {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+$/i, message: 'Invalid email' } })}
+              />
+              <TextField fullWidth label="Password" type={showPassword ? 'text' : 'password'} sx={{ mb: 3 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><Lock fontSize="small" sx={{ color: '#1B4B35' }} /></InputAdornment>,
+                  endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">{showPassword ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>,
+                }}
+                error={!!errors.password} helperText={errors.password?.message}
+                {...register('password', { required: 'Password is required' })}
+              />
+              <Button type="submit" fullWidth variant="contained" size="large" disabled={loading}
+                sx={{ py: 1.4, fontSize: '1rem', fontWeight: 700, borderRadius: 2,
+                  background: 'linear-gradient(135deg, #2E6B4F 0%, #1B4B35 100%)',
+                }}>
+                {loading ? 'Signing in...' : 'Sign In'}
+              </Button>
+            </form>
+
+            <Divider sx={{ my: 3 }}><Typography variant="caption" color="text.secondary">Demo Accounts</Typography></Divider>
+
+            <Box sx={{ p: 2, bgcolor: '#F3F8F5', borderRadius: 2, border: '1px solid rgba(27,75,53,0.12)' }}>
+              {[
+                { role: 'Super Admin', email: 'superadmin@safremanasik.com', pass: 'Super@2026!',   color: '#9B59B6' },
+                { role: 'Tenant Admin',email: 'admin@alrashidi.sa',          pass: 'Admin@1234',    color: '#C9A227' },
+                { role: 'Agent',       email: 'agent1@alrashidi.local',      pass: 'Agent@1234',    color: '#4A90D9' },
+                { role: 'Customer',    email: 'abdullah@alrashidi.local',    pass: 'Customer@1234', color: '#2E9E6B' },
+              ].map(({ role, email, pass, color }) => (
+                <Box key={role} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                  <Typography variant="caption" sx={{ color: '#1B4B35', fontWeight: 700, minWidth: 95 }}>{role}:</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>{email} / {pass}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+
+        <Typography variant="body2" textAlign="center" sx={{ mt: 2, color: 'rgba(255,255,255,0.6)' }}>
+          New organisation?{' '}
+          <Link to="/signup" style={{ color: '#C9A227', fontWeight: 600, textDecoration: 'none' }}>Start a free trial</Link>
+        </Typography>
+      </Box>
+    </Box>
+  );
+}

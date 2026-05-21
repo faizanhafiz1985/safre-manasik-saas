@@ -1,0 +1,489 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  AGENT
+  CUSTOMER
+}
+
+enum CustomerType {
+  B2C
+  B2B
+}
+
+enum BookingStatus {
+  TENTATIVE
+  CONFIRMED
+  CANCELLED
+}
+
+enum VehicleType {
+  BUS
+  CAR
+  VIP
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CREDIT_CARD
+  CHEQUE
+  PAYPAL
+  MOYASAR
+  STRIPE
+}
+
+enum HotelCity {
+  MAKKAH
+  MADINAH
+  JEDDAH
+  TAIF
+}
+
+enum VoucherType {
+  TENTATIVE
+  CONFIRMED
+}
+
+enum TenantPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  CANCELLED
+}
+
+// ─── Tenant (top-level container) ───────────────────────────────────────────
+
+model Tenant {
+  id                  String       @id @default(uuid())
+  slug                String       @unique
+  name                String
+  contactEmail        String
+  contactPhone        String?
+  crNumber            String?
+  vatNumber           String?
+  umrahLicenseNumber  String?
+  umrahLicenseExpiry  DateTime?
+  address             String?
+  city                String?
+  country             String       @default("Saudi Arabia")
+  currency            String       @default("SAR")
+  timezone            String       @default("Asia/Riyadh")
+  language            String       @default("en")
+  logoUrl             String?
+  primaryColor        String       @default("#0D7377")
+  plan                TenantPlan   @default(STARTER)
+  status              TenantStatus @default(TRIAL)
+  trialEndsAt         DateTime?
+  maxUsers            Int          @default(10)
+  maxBookings         Int          @default(100)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  users           User[]
+  hotels          Hotel[]
+  packages        Package[]
+  bookings        Booking[]
+  vehicles        Vehicle[]
+  routes          Route[]
+  cateringVendors CateringVendor[]
+  vouchers        Voucher[]
+  payments        Payment[]
+  invoices        Invoice[]
+  systemConfigs   SystemConfig[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
+// ─── User ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String        @id @default(uuid())
+  tenantId     String?       // NULL for SUPER_ADMIN (cross-tenant)
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(CUSTOMER)
+  customerType CustomerType? @default(B2C)
+  phone        String?
+  companyName  String?
+  crNumber     String?
+  vatNumber    String?
+  address      String?
+  isActive     Boolean       @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  tenant             Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookingsAsCustomer Booking[] @relation("CustomerBookings")
+  bookingsAsAgent    Booking[] @relation("AgentBookings")
+  packages           Package[] @relation("AgentPackages")
+
+  @@index([tenantId])
+  @@index([role])
+  @@map("users")
+}
+
+// ─── Hotel ──────────────────────────────────────────────────────────────────
+
+model Hotel {
+  id          String    @id @default(uuid())
+  tenantId    String
+  name        String
+  city        HotelCity
+  stars       Int       @default(3)
+  address     String?
+  description String?
+  amenities   String[]
+  distanceToHaramMeters Int?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  packageHotels PackageHotel[]
+
+  @@index([tenantId])
+  @@index([tenantId, city])
+  @@map("hotels")
+}
+
+// ─── Package ────────────────────────────────────────────────────────────────
+
+model Package {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  name                String
+  description         String?
+  durationDays        Int
+  transportIncluded   Boolean  @default(true)
+  cateringIncluded    Boolean  @default(true)
+  visaIncluded        Boolean  @default(false)
+  airportTransfer     Boolean  @default(true)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  priceTiers    PriceTier[]
+  packageHotels PackageHotel[]
+  bookings      Booking[]
+  agents        User[]         @relation("AgentPackages")
+
+  @@index([tenantId])
+  @@map("packages")
+}
+
+model PriceTier {
+  id          String  @id @default(uuid())
+  packageId   String
+  tierName    String
+  pricePerPax Decimal @db.Decimal(10, 2)
+  roomType    String
+  minPax      Int     @default(1)
+  maxPax      Int?
+  package     Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@map("price_tiers")
+}
+
+model PackageHotel {
+  id        String    @id @default(uuid())
+  packageId String
+  hotelId   String
+  city      HotelCity
+  nights    Int
+  package   Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  hotel     Hotel     @relation(fields: [hotelId], references: [id])
+
+  @@unique([packageId, hotelId])
+  @@map("package_hotels")
+}
+
+// ─── Booking ────────────────────────────────────────────────────────────────
+
+model Booking {
+  id             String        @id @default(uuid())
+  tenantId       String
+  bookingRef     String        @unique @default(cuid())
+  customerId     String
+  agentId        String?
+  packageId      String
+  priceTierId    String?
+  status         BookingStatus @default(TENTATIVE)
+  travelDateFrom DateTime
+  travelDateTo   DateTime
+  totalPax       Int
+  totalAmount    Decimal       @db.Decimal(10, 2)
+  currency       String        @default("SAR")
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     User               @relation("CustomerBookings", fields: [customerId], references: [id])
+  agent        User?              @relation("AgentBookings", fields: [agentId], references: [id])
+  package      Package            @relation(fields: [packageId], references: [id])
+  passengers   Passenger[]
+  transports   BookingTransport[]
+  caterings    BookingCatering[]
+  vouchers     Voucher[]
+  payments     Payment[]
+  invoice      Invoice?
+
+  @@index([tenantId])
+  @@index([tenantId, travelDateFrom])
+  @@index([tenantId, status])
+  @@map("bookings")
+}
+
+model Passenger {
+  id           String   @id @default(uuid())
+  bookingId    String
+  fullName     String
+  passportNo   String
+  passportExpiry DateTime?
+  nationality  String
+  dateOfBirth  DateTime
+  gender       String
+  phone        String?
+  email        String?
+  mahramName   String?
+  mahramRelation String?
+  isPrimary    Boolean  @default(false)
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("passengers")
+}
+
+// ─── Vehicles & Transport ───────────────────────────────────────────────────
+
+model Vehicle {
+  id            String      @id @default(uuid())
+  tenantId      String
+  name          String
+  plateNumber   String
+  type          VehicleType
+  capacity      Int
+  driverName    String
+  driverPhone   String
+  driverLicense String?
+  isAvailable   Boolean     @default(true)
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routes            Route[]
+  bookingTransports BookingTransport[]
+
+  @@unique([tenantId, plateNumber])
+  @@index([tenantId])
+  @@map("vehicles")
+}
+
+model Route {
+  id           String   @id @default(uuid())
+  tenantId     String
+  name         String
+  fromLocation String
+  toLocation   String
+  description  String?
+  vehicleId    String?
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?           @relation(fields: [vehicleId], references: [id])
+  bookingTransports BookingTransport[]
+
+  @@index([tenantId])
+  @@map("routes")
+}
+
+model BookingTransport {
+  id          String   @id @default(uuid())
+  bookingId   String
+  vehicleId   String
+  routeId     String?
+  departureAt DateTime?
+  arrivalAt   DateTime?
+  notes       String?
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  route       Route?   @relation(fields: [routeId], references: [id])
+
+  @@index([departureAt])
+  @@map("booking_transports")
+}
+
+// ─── Catering ───────────────────────────────────────────────────────────────
+
+model CateringVendor {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?
+  speciality  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mealPlans MealPlan[]
+
+  @@index([tenantId])
+  @@map("catering_vendors")
+}
+
+model MealPlan {
+  id          String         @id @default(uuid())
+  vendorId    String
+  name        String
+  mealType    MealType
+  description String?
+  pricePerPax Decimal        @db.Decimal(10, 2)
+  isActive    Boolean        @default(true)
+  vendor      CateringVendor @relation(fields: [vendorId], references: [id])
+
+  bookingCaterings BookingCatering[]
+
+  @@map("meal_plans")
+}
+
+model BookingCatering {
+  id         String   @id @default(uuid())
+  bookingId  String
+  mealPlanId String
+  paxCount   Int
+  notes      String?
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id])
+
+  @@map("booking_caterings")
+}
+
+// ─── Vouchers, Payments, Invoices ───────────────────────────────────────────
+
+model Voucher {
+  id          String      @id @default(uuid())
+  tenantId    String
+  bookingId   String
+  type        VoucherType
+  voucherNo   String?     @unique
+  pdfUrl      String?
+  generatedAt DateTime    @default(now())
+  isValid     Boolean     @default(true)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("vouchers")
+}
+
+model Payment {
+  id           String        @id @default(uuid())
+  tenantId     String
+  bookingId    String
+  amount       Decimal       @db.Decimal(10, 2)
+  currency     String        @default("SAR")
+  method       PaymentMethod @default(CASH)
+  status       PaymentStatus @default(PENDING)
+  reference    String?
+  gatewayRef   String?       // For Moyasar/Stripe transaction id
+  notes        String?
+  paidAt       DateTime      @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("payments")
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  tenantId    String
+  bookingId   String        @unique
+  invoiceNo   String        @unique @default(cuid())
+  totalAmount Decimal       @db.Decimal(10, 2)
+  paidAmount  Decimal       @db.Decimal(10, 2) @default(0)
+  balance     Decimal       @db.Decimal(10, 2)
+  vatAmount   Decimal       @db.Decimal(10, 2) @default(0)
+  currency    String        @default("SAR")
+  status      PaymentStatus @default(PENDING)
+  dueDate     DateTime?
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("invoices")
+}
+
+model SystemConfig {
+  id          String   @id @default(uuid())
+  tenantId    String?  // NULL for global config
+  key         String
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("system_configs")
+}
+
+// ─── Audit Log (cross-tenant for SUPER_ADMIN view) ──────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String?
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  payload    String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

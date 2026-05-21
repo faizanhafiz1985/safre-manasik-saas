@@ -1,0 +1,14 @@
+const router = require('express').Router();
+const ctrl = require('../controllers/reportController');
+const { authenticate, authorize } = require('../middleware/auth');
+const { tenantScope, requireTenant } = require('../middleware/tenant');
+
+router.use(authenticate, tenantScope, requireTenant, authorize('ADMIN', 'AGENT'));
+
+router.get('/daily-schedule', ctrl.dailySchedule);
+router.get('/daily-schedule/export', ctrl.exportDailyScheduleCsv);
+
+router.get('/transport-by-date', ctrl.transportByDate);
+router.get('/transport-by-date/export', ctrl.exportTransportCsv);
+
+module.exports = router;
