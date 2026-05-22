@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import {
   Box, Paper, Typography, TextField, Button, Stack, Grid, Chip,
   Card, CardContent, Divider, FormControl, InputLabel, Select, MenuItem,
-  Switch, FormControlLabel, Alert, Link,
+  Switch, FormControlLabel, Alert, Link, Autocomplete, InputAdornment,
 } from '@mui/material';
 import { Business, Save, Payment, OpenInNew } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import api from '../services/api';
+import COUNTRIES, { getCountryByName } from '../data/countries';
 
 export default function TenantSettingsPage() {
   const [tenant, setTenant] = useState(null);
@@ -24,6 +25,7 @@ export default function TenantSettingsPage() {
       vatNumber: data.vatNumber || '',
       umrahLicenseNumber: data.umrahLicenseNumber || '',
       address: data.address || '',
+      country: getCountryByName(data.country) || null,
       city: data.city || '',
       currency: data.currency || 'SAR',
       language: data.language || 'en',
@@ -41,10 +43,34 @@ export default function TenantSettingsPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Client-side validation mirrors the signup form so existing tenants get the
+  // same guarantees if they edit these fields later.
+  const validate = () => {
+    if (form.contactPhone) {
+      const cleaned = form.contactPhone.replace(/[\s\-()]/g, '');
+      if (!/^\+?\d{11,16}$/.test(cleaned)) {
+        toast.error('Contact phone must be a valid international number (12+ digits incl. country code, e.g. +966501234567)');
+        return false;
+      }
+    }
+    if (form.crNumber && !/^\d{10}$/.test(form.crNumber)) {
+      toast.error('CR Number must be exactly 10 digits');
+      return false;
+    }
+    if (form.vatNumber && !/^\d{15}$/.test(form.vatNumber)) {
+      toast.error('VAT Number must be exactly 15 digits');
+      return false;
+    }
+    return true;
+  };
+
   const save = async () => {
+    if (!validate()) return;
     setSaving(true);
     try {
-      await api.put('/tenant/current', form);
+      // Flatten country object → name string for the backend.
+      const payload = { ...form, country: form.country?.name || '' };
+      await api.put('/tenant/current', payload);
       toast.success('Settings saved');
       load();
     } finally {
@@ -107,12 +133,58 @@ export default function TenantSettingsPage() {
             <TextField fullWidth label="Contact Email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
           </Grid>
           <Grid item xs={12} md={6}>
-            <TextField fullWidth label="Contact Phone" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
+            <TextField
+              fullWidth
+              label="Contact Phone"
+              value={form.contactPhone}
+              onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+              placeholder={form.country ? `+${form.country.dialCode} XXXXXXXXX` : '+966XXXXXXXXX'}
+              InputProps={{
+                startAdornment: form.country && (
+                  <InputAdornment position="start">+{form.country.dialCode}</InputAdornment>
+                ),
+              }}
+              helperText="Include country code, 12+ digits"
+            />
           </Grid>
           <Grid item xs={12} md={6}>
-            <TextField fullWidth label="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            <Autocomplete
+              fullWidth
+              options={COUNTRIES}
+              getOptionLabel={(o) => o?.name || ''}
+              isOptionEqualToValue={(a, b) => a?.code === b?.code}
+              value={form.country}
+              onChange={(_, val) => setForm({ ...form, country: val, city: '' })}
+              renderOption={(props, option) => (
+                <li {...props} key={option.code}>
+                  <Box component="span" sx={{ mr: 1, fontWeight: 700, color: '#1B4B35' }}>
+                    +{option.dialCode}
+                  </Box>
+                  {option.name}
+                </li>
+              )}
+              renderInput={(params) => <TextField {...params} label="Country" />}
+            />
           </Grid>
-          <Grid item xs={12}>
+          <Grid item xs={12} md={6}>
+            <Autocomplete
+              fullWidth
+              freeSolo
+              options={form.country?.cities || []}
+              value={form.city || null}
+              onChange={(_, val) => setForm({ ...form, city: val || '' })}
+              onInputChange={(_, val) => setForm({ ...form, city: val })}
+              disabled={!form.country}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={form.country ? 'City' : 'City (pick a country first)'}
+                  helperText={form.country ? 'Pick from list or type a custom city' : 'Country selection enables the city list'}
+                />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
             <TextField fullWidth label="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </Grid>
         </Grid>
@@ -121,10 +193,26 @@ export default function TenantSettingsPage() {
         <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Saudi Compliance</Typography>
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
-            <TextField fullWidth label="CR Number (10 digits)" value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} />
+            <TextField
+              fullWidth
+              label="CR Number (10 digits)"
+              value={form.crNumber}
+              onChange={(e) => setForm({ ...form, crNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+              inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+              helperText="Digits only — Saudi Commercial Registration"
+              error={!!form.crNumber && !/^\d{10}$/.test(form.crNumber)}
+            />
           </Grid>
           <Grid item xs={12} md={4}>
-            <TextField fullWidth label="VAT Number (15 digits)" value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} />
+            <TextField
+              fullWidth
+              label="VAT Number (15 digits)"
+              value={form.vatNumber}
+              onChange={(e) => setForm({ ...form, vatNumber: e.target.value.replace(/\D/g, '').slice(0, 15) })}
+              inputProps={{ inputMode: 'numeric', maxLength: 15 }}
+              helperText="Digits only — Saudi VAT registration"
+              error={!!form.vatNumber && !/^\d{15}$/.test(form.vatNumber)}
+            />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField fullWidth label="Umrah License Number" value={form.umrahLicenseNumber} onChange={(e) => setForm({ ...form, umrahLicenseNumber: e.target.value })} />

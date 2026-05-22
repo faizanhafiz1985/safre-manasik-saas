@@ -48,7 +48,7 @@ const updateCurrent = async (req, res, next) => {
 
     const allowedFields = [
       'name', 'contactEmail', 'contactPhone', 'crNumber', 'vatNumber',
-      'umrahLicenseNumber', 'address', 'city', 'currency', 'timezone',
+      'umrahLicenseNumber', 'address', 'city', 'country', 'currency', 'timezone',
       'language', 'logoUrl', 'primaryColor',
       // PayPal config
       'paypalEnabled', 'paypalMode', 'paypalClientId', 'paypalSecret',

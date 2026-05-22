@@ -30,6 +30,22 @@ const signupTenant = async (req, res, next) => {
     if (!adminEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) return res.status(400).json({ error: 'Valid admin email is required' });
     if (!adminPassword || adminPassword.length < 8) return res.status(400).json({ error: 'Admin password must be at least 8 characters' });
 
+    // Optional-but-validated business fields. The signup form on the client
+    // enforces these too; the server checks them again so direct API callers
+    // can't smuggle malformed data into the DB.
+    if (contactPhone) {
+      const cleaned = String(contactPhone).replace(/[\s\-()]/g, '');
+      if (!/^\+?\d{11,16}$/.test(cleaned)) {
+        return res.status(400).json({ error: 'Contact phone must include country code and be 12+ digits (e.g. +966501234567)' });
+      }
+    }
+    if (crNumber && !/^\d{10}$/.test(String(crNumber))) {
+      return res.status(400).json({ error: 'CR Number must be exactly 10 digits' });
+    }
+    if (vatNumber && !/^\d{15}$/.test(String(vatNumber))) {
+      return res.status(400).json({ error: 'VAT Number must be exactly 15 digits' });
+    }
+
     const existingUser = await runUnscoped(() => prisma.user.findUnique({ where: { email: adminEmail } }));
     if (existingUser) return res.status(409).json({ error: 'Email already registered' });
 
