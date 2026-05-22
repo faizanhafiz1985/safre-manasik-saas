@@ -1,4 +1,5 @@
 const prisma = require('../config/database');
+const { invalidatePlanCache, getTenantQuota } = require('../middleware/quota');
 
 // All super-admin endpoints run with isSuperAdmin=true in context (set by middleware),
 // so the Prisma middleware does not filter by tenantId.
@@ -165,8 +166,87 @@ const allBookings = async (req, res, next) => {
   }
 };
 
+// ─── Plan configuration ───────────────────────────────────────────────────
+// These let the SUPER_ADMIN tune what each plan offers (limits + features)
+// at runtime, with no code changes.
+
+const listPlans = async (req, res, next) => {
+  try {
+    const plans = await prisma.planConfig.findMany({ orderBy: { priceMonthly: 'asc' } });
+    // Also include current usage stats per plan
+    const tenantCounts = await prisma.tenant.groupBy({
+      by: ['plan'],
+      _count: { id: true },
+    });
+    const countByPlan = {};
+    for (const t of tenantCounts) countByPlan[t.plan] = t._count.id;
+    const enriched = plans.map((p) => ({ ...p, tenantCount: countByPlan[p.plan] || 0 }));
+    res.json({ data: enriched });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const updatePlan = async (req, res, next) => {
+  try {
+    const allowedFields = [
+      'displayName', 'description', 'defaultMaxUsers', 'defaultMaxBookings',
+      'features', 'priceMonthly', 'priceCurrency', 'isActive',
+    ];
+    const data = {};
+    for (const f of allowedFields) {
+      if (req.body[f] !== undefined) data[f] = req.body[f];
+    }
+    // Basic validation — keep numeric fields sane
+    if (data.defaultMaxUsers !== undefined && (typeof data.defaultMaxUsers !== 'number' || data.defaultMaxUsers < 0)) {
+      return res.status(400).json({ error: 'defaultMaxUsers must be a non-negative number' });
+    }
+    if (data.defaultMaxBookings !== undefined && (typeof data.defaultMaxBookings !== 'number' || data.defaultMaxBookings < 0)) {
+      return res.status(400).json({ error: 'defaultMaxBookings must be a non-negative number' });
+    }
+    if (data.features !== undefined && (typeof data.features !== 'object' || Array.isArray(data.features))) {
+      return res.status(400).json({ error: 'features must be an object of key->boolean' });
+    }
+    // Find by plan key (STARTER/GROWTH/ENTERPRISE) in URL
+    const updated = await prisma.planConfig.update({
+      where: { plan: req.params.plan },
+      data,
+    });
+    invalidatePlanCache();
+    res.json(updated);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Plan not found' });
+    next(err);
+  }
+};
+
+const tenantUsage = async (req, res, next) => {
+  try {
+    const tenantId = req.params.id;
+    const quota = await getTenantQuota(tenantId);
+    if (!quota) return res.status(404).json({ error: 'Tenant not found' });
+    const [users, bookings] = await Promise.all([
+      prisma.user.count({ where: { tenantId } }),
+      prisma.booking.count({ where: { tenantId } }),
+    ]);
+    res.json({
+      tenant: quota.tenant,
+      plan: quota.plan,
+      status: quota.status,
+      features: quota.features,
+      usage: {
+        users: { current: users, max: quota.maxUsers, percent: quota.maxUsers ? Math.round((users / quota.maxUsers) * 100) : 0 },
+        bookings: { current: bookings, max: quota.maxBookings, percent: quota.maxBookings ? Math.round((bookings / quota.maxBookings) * 100) : 0 },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   listTenants, getTenant, updateTenant,
   suspendTenant, activateTenant, deleteTenant,
   platformStats, allBookings,
+  listPlans, updatePlan, tenantUsage,
 };

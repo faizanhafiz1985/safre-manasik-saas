@@ -15,4 +15,11 @@ router.delete('/tenants/:id', ctrl.deleteTenant);
 router.get('/stats', ctrl.platformStats);
 router.get('/bookings', ctrl.allBookings);
 
+// Plan configuration (configurable limits + feature flags per plan)
+router.get('/plans', ctrl.listPlans);
+router.put('/plans/:plan', ctrl.updatePlan);
+
+// Per-tenant usage snapshot (current vs max for users/bookings, active features)
+router.get('/tenants/:id/usage', ctrl.tenantUsage);
+
 module.exports = router;

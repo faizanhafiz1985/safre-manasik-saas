@@ -2,6 +2,7 @@ const router = require('express').Router();
 const ctrl = require('../controllers/voucherController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { tenantScope, requireTenant } = require('../middleware/tenant');
+const { requireFeature } = require('../middleware/quota');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/database');
 const { runWithTenant } = require('../config/tenantContext');
@@ -38,11 +39,14 @@ const flexAuth = async (req, res, next) => {
   }
 };
 
+// PDF voucher download requires the 'pdfVouchers' feature flag (gated per plan).
+// Preview HTML is always allowed so customers on lower plans still see vouchers
+// in-browser; only the polished PDF artifact is plan-gated.
 router.get('/preview/:bookingId', flexAuth, tenantScope, requireTenant, ctrl.previewVoucher);
-router.get('/download/:id', flexAuth, tenantScope, requireTenant, ctrl.downloadVoucher);
+router.get('/download/:id', flexAuth, tenantScope, requireTenant, requireFeature('pdfVouchers'), ctrl.downloadVoucher);
 
 router.use(authenticate, tenantScope, requireTenant);
 router.get('/', ctrl.getVouchers);
-router.post('/generate', authorize('ADMIN', 'AGENT'), ctrl.generateVoucher);
+router.post('/generate', authorize('ADMIN', 'AGENT'), requireFeature('pdfVouchers'), ctrl.generateVoucher);
 
 module.exports = router;

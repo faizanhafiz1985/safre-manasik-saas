@@ -7,5 +7,6 @@ router.use(authenticate, tenantScope, requireTenant);
 
 router.get('/current', ctrl.getCurrent);
 router.put('/current', authorize('ADMIN'), ctrl.updateCurrent);
+router.get('/current/quota', ctrl.getCurrentQuota);
 
 module.exports = router;

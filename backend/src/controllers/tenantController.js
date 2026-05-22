@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const { getTenantId, runWithTenant } = require('../config/tenantContext');
+const { getTenantQuota } = require('../middleware/quota');
 
 // Get current tenant info (any authenticated user in the tenant)
 const getCurrent = async (req, res, next) => {
@@ -56,4 +57,39 @@ const updateCurrent = async (req, res, next) => {
   }
 };
 
-module.exports = { getCurrent, updateCurrent };
+// Read-only quota/feature snapshot for the current tenant. Used by the
+// frontend to show "Users 5/10" badges and gate UI elements behind feature
+// flags (e.g. hide the "Download PDF" button if pdfVouchers === false).
+const getCurrentQuota = async (req, res, next) => {
+  try {
+    const tenantId = getTenantId();
+    if (!tenantId) return res.status(404).json({ error: 'No tenant in context' });
+    const quota = await getTenantQuota(tenantId);
+    if (!quota) return res.status(404).json({ error: 'Tenant not found' });
+    let users = 0, bookings = 0;
+    await new Promise((resolve, reject) => {
+      runWithTenant({ isSuperAdmin: true }, async () => {
+        try {
+          [users, bookings] = await Promise.all([
+            prisma.user.count({ where: { tenantId } }),
+            prisma.booking.count({ where: { tenantId } }),
+          ]);
+          resolve();
+        } catch (e) { reject(e); }
+      });
+    });
+    res.json({
+      plan: quota.plan,
+      status: quota.status,
+      features: quota.features,
+      usage: {
+        users: { current: users, max: quota.maxUsers, remaining: quota.maxUsers != null ? Math.max(0, quota.maxUsers - users) : null },
+        bookings: { current: bookings, max: quota.maxBookings, remaining: quota.maxBookings != null ? Math.max(0, quota.maxBookings - bookings) : null },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getCurrent, updateCurrent, getCurrentQuota };

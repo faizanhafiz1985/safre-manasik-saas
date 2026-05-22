@@ -80,6 +80,30 @@ enum TenantStatus {
   CANCELLED
 }
 
+// ─── PlanConfig (configurable plan defaults + features) ─────────────────────
+// SUPER_ADMIN edits these to define what each plan offers — no hardcoding.
+// Tenant.maxUsers/maxBookings override these defaults when set; otherwise
+// PlanConfig.defaultMaxUsers/defaultMaxBookings apply.
+// `features` is a JSON map of feature flag keys to booleans, e.g.:
+//   { "pdfVouchers": true, "reports": true, "apiAccess": false, "customBranding": false }
+// Add new feature keys here as the product grows — no schema migration needed.
+model PlanConfig {
+  id                 String     @id @default(uuid())
+  plan               TenantPlan @unique
+  displayName        String
+  description        String?
+  defaultMaxUsers    Int        @default(10)
+  defaultMaxBookings Int        @default(100)
+  features           Json       @default("{}")
+  priceMonthly       Decimal?   @db.Decimal(10, 2)
+  priceCurrency      String     @default("SAR")
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@map("plan_configs")
+}
+
 // ─── Tenant (top-level container) ───────────────────────────────────────────
 
 model Tenant {
