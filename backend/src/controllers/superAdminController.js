@@ -1,5 +1,16 @@
 const prisma = require('../config/database');
 const { invalidatePlanCache, getTenantQuota } = require('../middleware/quota');
+const {
+  sendEmail,
+  applicationApprovedHtml,
+  applicationRejectedHtml,
+} = require('../services/emailService');
+
+const slugify = (s) =>
+  s.toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 50);
 
 // All super-admin endpoints run with isSuperAdmin=true in context (set by middleware),
 // so the Prisma middleware does not filter by tenantId.
@@ -250,9 +261,183 @@ const tenantUsage = async (req, res, next) => {
   }
 };
 
+// ─── Tenant Applications (approval workflow) ──────────────────────────────
+// New signups land as TenantApplication rows with status=PENDING. The
+// SUPER_ADMIN sees them here and decides. Approval is what actually creates
+// the Tenant + ADMIN user; rejection just records the decision and emails the
+// applicant.
+
+const listApplications = async (req, res, next) => {
+  try {
+    const { status, search, page = 1, limit = 50 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+    const where = {
+      ...(status && { status }),
+      ...(search && {
+        OR: [
+          { tenantName: { contains: search, mode: 'insensitive' } },
+          { adminEmail: { contains: search, mode: 'insensitive' } },
+          { adminName: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+    const [apps, total, counts] = await Promise.all([
+      prisma.tenantApplication.findMany({
+        where, skip, take: Number(limit),
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        // Never return the password hash, even to SUPER_ADMIN
+        select: {
+          id: true, tenantName: true, contactEmail: true, contactPhone: true,
+          crNumber: true, vatNumber: true, umrahLicenseNumber: true, city: true, country: true,
+          adminName: true, adminEmail: true,
+          status: true, reviewNotes: true, rejectionReason: true,
+          reviewedAt: true, reviewedById: true,
+          approvedTenantId: true, approvedUserId: true,
+          createdAt: true, updatedAt: true,
+        },
+      }),
+      prisma.tenantApplication.count({ where }),
+      prisma.tenantApplication.groupBy({ by: ['status'], _count: { id: true } }),
+    ]);
+    const summary = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+    for (const r of counts) summary[r.status] = r._count.id;
+    res.json({ data: apps, total, page: Number(page), pages: Math.ceil(total / limit), summary });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const approveApplication = async (req, res, next) => {
+  try {
+    const { notes } = req.body || {};
+    const app = await prisma.tenantApplication.findUnique({ where: { id: req.params.id } });
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (app.status !== 'PENDING') {
+      return res.status(409).json({ error: `Application is already ${app.status.toLowerCase()}` });
+    }
+
+    // Generate a unique slug
+    let slug = slugify(app.tenantName);
+    let suffix = 0;
+    while (true) {
+      const exists = await prisma.tenant.findUnique({ where: { slug: suffix ? `${slug}-${suffix}` : slug } });
+      if (!exists) break;
+      suffix++;
+    }
+    if (suffix) slug = `${slug}-${suffix}`;
+
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+    // Atomic: create tenant + user + mark application APPROVED.
+    const result = await prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: {
+          slug,
+          name: app.tenantName,
+          contactEmail: app.contactEmail || app.adminEmail,
+          contactPhone: app.contactPhone,
+          crNumber: app.crNumber,
+          vatNumber: app.vatNumber,
+          umrahLicenseNumber: app.umrahLicenseNumber,
+          city: app.city,
+          country: app.country || 'Saudi Arabia',
+          status: 'TRIAL',
+          trialEndsAt,
+        },
+      });
+      const user = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          name: app.adminName,
+          email: app.adminEmail,
+          password: app.adminPasswordHash,   // already bcrypt-hashed at submit time
+          role: 'ADMIN',
+          phone: app.contactPhone,
+          companyName: app.tenantName,
+          crNumber: app.crNumber,
+          vatNumber: app.vatNumber,
+        },
+      });
+      const updated = await tx.tenantApplication.update({
+        where: { id: app.id },
+        data: {
+          status: 'APPROVED',
+          reviewNotes: notes || null,
+          reviewedAt: new Date(),
+          reviewedById: req.user.id,
+          approvedTenantId: tenant.id,
+          approvedUserId: user.id,
+        },
+      });
+      return { tenant, user, application: updated };
+    });
+
+    // Email the new admin so they know they can log in.
+    const loginUrl = (process.env.FRONTEND_URL || 'https://app.safremanasik.com').replace(/\/$/, '') + '/login';
+    sendEmail({
+      to: app.adminEmail,
+      subject: `Welcome to Safre Manasik — ${app.tenantName} is approved`,
+      html: applicationApprovedHtml({
+        adminName: app.adminName,
+        tenantName: app.tenantName,
+        adminEmail: app.adminEmail,
+        loginUrl,
+      }),
+    }).catch(() => {});
+
+    res.json({
+      message: 'Application approved. Tenant and admin user created. Welcome email sent.',
+      tenant: result.tenant,
+      user: { id: result.user.id, email: result.user.email, name: result.user.name },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const rejectApplication = async (req, res, next) => {
+  try {
+    const { reason } = req.body || {};
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'A rejection reason is required so we can tell the applicant why.' });
+    }
+    const app = await prisma.tenantApplication.findUnique({ where: { id: req.params.id } });
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (app.status !== 'PENDING') {
+      return res.status(409).json({ error: `Application is already ${app.status.toLowerCase()}` });
+    }
+
+    const updated = await prisma.tenantApplication.update({
+      where: { id: app.id },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: reason.trim(),
+        reviewedAt: new Date(),
+        reviewedById: req.user.id,
+      },
+    });
+
+    sendEmail({
+      to: app.adminEmail,
+      subject: `Update on your Safre Manasik application — ${app.tenantName}`,
+      html: applicationRejectedHtml({
+        adminName: app.adminName,
+        tenantName: app.tenantName,
+        reason: reason.trim(),
+      }),
+    }).catch(() => {});
+
+    res.json({ message: 'Application rejected. Applicant has been notified.', application: updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   listTenants, getTenant, updateTenant,
   suspendTenant, activateTenant, deleteTenant,
   platformStats, allBookings,
   listPlans, updatePlan, tenantUsage,
+  // Approval workflow
+  listApplications, approveApplication, rejectApplication,
 };

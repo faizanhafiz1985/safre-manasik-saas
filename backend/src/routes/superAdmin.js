@@ -22,4 +22,13 @@ router.put('/plans/:plan', ctrl.updatePlan);
 // Per-tenant usage snapshot (current vs max for users/bookings, active features)
 router.get('/tenants/:id/usage', ctrl.tenantUsage);
 
+// Tenant applications (approval workflow)
+router.get('/applications', ctrl.listApplications);
+router.post('/applications/:id/approve', ctrl.approveApplication);
+router.post('/applications/:id/reject', ctrl.rejectApplication);
+
+// Diagnostics — read-only system health check, safe to call anytime
+const diagnosticsCtrl = require('../controllers/diagnosticsController');
+router.get('/diagnostics', diagnosticsCtrl.diagnostics);
+
 module.exports = router;

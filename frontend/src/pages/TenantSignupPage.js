@@ -30,6 +30,7 @@ import COUNTRIES from '../data/countries';
 export default function TenantSignupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(null); // {email, message} after successful submit
   const {
     register: r,
     handleSubmit,
@@ -79,8 +80,12 @@ export default function TenantSignupPage() {
         adminPassword: data.adminPassword,
       };
       const { data: result } = await api.post('/auth/signup-tenant', payload);
-      localStorage.setItem('token', result.token);
-      window.location.href = '/dashboard';
+      // New flow: application goes to SUPER_ADMIN for review. We do NOT
+      // auto-login. Show a friendly confirmation instead.
+      setSubmitted({
+        email: data.adminEmail,
+        message: result.message || 'Your application is under review.',
+      });
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed. Please review the fields and try again.');
     } finally {
@@ -127,6 +132,30 @@ export default function TenantSignupPage() {
             </Typography>
           </Box>
           <CardContent sx={{ p: 4 }}>
+            {submitted ? (
+              <Box sx={{ textAlign: 'center', py: 3 }}>
+                <Box sx={{
+                  display: 'inline-flex', width: 64, height: 64, borderRadius: '50%',
+                  bgcolor: '#E8F5EE', color: '#2E9E6B', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 36, mb: 2,
+                }}>✓</Box>
+                <Typography variant="h6" fontWeight={700} color="#1B4B35" sx={{ mb: 1 }}>
+                  Application submitted!
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {submitted.message}
+                </Typography>
+                <Alert severity="info" sx={{ textAlign: 'left' }}>
+                  We've sent a confirmation to <strong>{submitted.email}</strong>. Once approved,
+                  you'll get a second email with a link to log in. If you don't see anything within
+                  24 hours, please check your spam folder or reply to that email.
+                </Alert>
+                <Link to="/login" style={{ color: '#C9A227', fontWeight: 600, textDecoration: 'none', display: 'inline-block', marginTop: 16 }}>
+                  ← Back to sign in
+                </Link>
+              </Box>
+            ) : (
+              <>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <form onSubmit={handleSubmit(onSubmit)} noValidate>
               <Typography variant="subtitle1" fontWeight={700} color="#1B4B35" sx={{ mb: 1 }}>
@@ -321,6 +350,8 @@ export default function TenantSignupPage() {
                 {loading ? 'Creating your account…' : 'Create Account & Start Trial'}
               </Button>
             </form>
+              </>
+            )}
           </CardContent>
         </Card>
 

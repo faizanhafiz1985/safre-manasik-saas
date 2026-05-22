@@ -80,6 +80,50 @@ enum TenantStatus {
   CANCELLED
 }
 
+// ─── TenantApplication ──────────────────────────────────────────────────────
+// New tenant signups land here first as PENDING. SUPER_ADMIN reviews and
+// either approves (which creates the Tenant + admin User) or rejects (which
+// keeps the row for audit). adminPasswordHash is bcrypt'd at submit time so
+// the plaintext password is never persisted on disk.
+enum TenantApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model TenantApplication {
+  id                 String                  @id @default(uuid())
+  tenantName         String
+  contactEmail       String?
+  contactPhone       String?
+  crNumber           String?
+  vatNumber          String?
+  umrahLicenseNumber String?
+  city               String?
+  country            String?
+
+  adminName          String
+  adminEmail         String                  @unique
+  adminPasswordHash  String                  // bcrypt-hashed at submit time
+
+  status             TenantApplicationStatus @default(PENDING)
+  reviewNotes        String?                 // free-form notes the reviewer attaches
+  rejectionReason    String?
+  reviewedById       String?                 // SUPER_ADMIN user id who decided
+  reviewedAt         DateTime?
+
+  // Once approved, we keep links to the created tenant + user for traceability.
+  approvedTenantId   String?
+  approvedUserId     String?
+
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@index([status])
+  @@index([adminEmail])
+  @@map("tenant_applications")
+}
+
 // ─── PlanConfig (configurable plan defaults + features) ─────────────────────
 // SUPER_ADMIN edits these to define what each plan offers — no hardcoding.
 // Tenant.maxUsers/maxBookings override these defaults when set; otherwise

@@ -2,6 +2,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/database');
 const { runWithTenant } = require('../config/tenantContext');
+const {
+  sendEmail,
+  applicationReceivedHtml,
+  superAdminNewApplicationHtml,
+} = require('../services/emailService');
 
 const generateToken = (user) =>
   jwt.sign(
@@ -46,47 +51,78 @@ const signupTenant = async (req, res, next) => {
       return res.status(400).json({ error: 'VAT Number must be exactly 15 digits' });
     }
 
+    // Defence in depth: the email must be unique across both real users AND
+    // any existing pending applications, otherwise someone could grab an
+    // email and squat on it.
     const existingUser = await runUnscoped(() => prisma.user.findUnique({ where: { email: adminEmail } }));
     if (existingUser) return res.status(409).json({ error: 'Email already registered' });
-
-    let slug = slugify(tenantName);
-    let suffix = 0;
-    while (true) {
-      const exists = await runUnscoped(() => prisma.tenant.findUnique({ where: { slug: suffix ? `${slug}-${suffix}` : slug } }));
-      if (!exists) break;
-      suffix++;
-    }
-    if (suffix) slug = `${slug}-${suffix}`;
-
-    const hash = await bcrypt.hash(adminPassword, 12);
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-
-    const result = await runUnscoped(() =>
-      prisma.$transaction(async (tx) => {
-        const tenant = await tx.tenant.create({
-          data: {
-            slug, name: tenantName, contactEmail: contactEmail || adminEmail, contactPhone,
-            crNumber, vatNumber, umrahLicenseNumber, city, country: country || 'Saudi Arabia',
-            status: 'TRIAL', trialEndsAt,
-          },
-        });
-        const user = await tx.user.create({
-          data: {
-            tenantId: tenant.id,
-            name: adminName, email: adminEmail, password: hash,
-            role: 'ADMIN', phone: contactPhone, companyName: tenantName,
-            crNumber, vatNumber,
-          },
-        });
-        return { tenant, user };
-      })
+    const existingApp = await runUnscoped(() =>
+      prisma.tenantApplication.findUnique({ where: { adminEmail } })
     );
+    if (existingApp && existingApp.status === 'PENDING') {
+      return res.status(409).json({ error: 'An application from this email is already under review.' });
+    }
+    if (existingApp && existingApp.status === 'APPROVED') {
+      return res.status(409).json({ error: 'This email already has an approved account. Please log in.' });
+    }
 
-    const { password: _, ...safeUser } = result.user;
-    res.status(201).json({
-      token: generateToken(result.user),
-      user: safeUser,
-      tenant: result.tenant,
+    // Hash the password NOW so we never persist plaintext.
+    const hash = await bcrypt.hash(adminPassword, 12);
+
+    // If a rejected application exists for this email, overwrite it so the
+    // applicant can re-apply. Otherwise create a new one.
+    const application = await runUnscoped(async () => {
+      if (existingApp && existingApp.status === 'REJECTED') {
+        return prisma.tenantApplication.update({
+          where: { id: existingApp.id },
+          data: {
+            tenantName, contactEmail: contactEmail || adminEmail, contactPhone,
+            crNumber, vatNumber, umrahLicenseNumber, city,
+            country: country || 'Saudi Arabia',
+            adminName, adminPasswordHash: hash,
+            status: 'PENDING', rejectionReason: null, reviewNotes: null,
+            reviewedAt: null, reviewedById: null,
+          },
+        });
+      }
+      return prisma.tenantApplication.create({
+        data: {
+          tenantName, contactEmail: contactEmail || adminEmail, contactPhone,
+          crNumber, vatNumber, umrahLicenseNumber, city,
+          country: country || 'Saudi Arabia',
+          adminName, adminEmail, adminPasswordHash: hash,
+          status: 'PENDING',
+        },
+      });
+    });
+
+    // Fire-and-forget notifications. We don't await both because email is best-effort.
+    sendEmail({
+      to: adminEmail,
+      subject: 'We received your Safre Manasik application',
+      html: applicationReceivedHtml({ adminName, tenantName }),
+    }).catch(() => {});
+
+    // Notify all SUPER_ADMINs by email so they can review.
+    runUnscoped(() => prisma.user.findMany({
+      where: { role: 'SUPER_ADMIN', isActive: true },
+      select: { email: true },
+    })).then((admins) => {
+      if (admins.length === 0) return;
+      sendEmail({
+        to: admins.map((a) => a.email),
+        subject: `[Safre Manasik] New tenant application — ${tenantName}`,
+        html: superAdminNewApplicationHtml({ application }),
+      }).catch(() => {});
+    }).catch(() => {});
+
+    res.status(202).json({
+      applicationId: application.id,
+      status: 'PENDING',
+      message:
+        'Your application has been received and is under review. ' +
+        'You will receive an email at ' + adminEmail +
+        ' as soon as our team makes a decision (typically within 1 business day).',
     });
   } catch (err) {
     next(err);
