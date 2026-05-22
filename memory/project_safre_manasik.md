@@ -41,3 +41,14 @@ Full production-ready multi-tenant SaaS Umrah Travel Management platform (v2.0).
 **Deployment target:** Railway (PaaS that deploys from GitHub). Each service has `railway.json`. Backend Dockerfile runs `prisma db push` on startup. Frontend nginx.conf uses `${PORT}` from Railway. Custom domains configured via Dynadot DNS (CNAMEs).
 
 **Go-live docs:** `GO_LIVE.md` is the entry point. References `SETUP_RAILWAY.md`, `SETUP_DYNADOT_DNS.md`, `SETUP_PAYPAL.md`. End-to-end smoke checklist included.
+
+**Live production deployment (2026-05-21):**
+- GitHub repo: https://github.com/faizanhafiz1985/safre-manasik-saas
+- Railway project: `zesty-elegance` (ID: adcd3710-a113-457d-af99-8a462aa04fd6)
+- Frontend URL: https://frontend-production-56ba6.up.railway.app
+- Backend URL: https://backend-production-44fd.up.railway.app
+- Database: Railway-managed Postgres 17 with attached volume
+- Admin login (live prod): admin@safremanasik.com / SafreAdmin@2026!
+- Tenant slug: safre-manasik
+- PayPal: stub mode (replace PAYPAL_CLIENT_ID/SECRET env vars on backend when ready)
+- DNS: Dynadot — CNAMEs not yet wired (still uses railway.app subdomains)
