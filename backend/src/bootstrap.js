@@ -15,17 +15,34 @@ const prisma = new PrismaClient();
 
 async function ensureSuperAdmin() {
   try {
+    const email = process.env.SUPERADMIN_EMAIL || 'superadmin@safremanasik.com';
+    const password = process.env.SUPERADMIN_PASSWORD;
+
     // Use raw queries to bypass tenant middleware
     const existing = await prisma.$queryRawUnsafe(
       `SELECT id, email FROM users WHERE role = 'SUPER_ADMIN' LIMIT 1`
     );
+
     if (existing && existing.length > 0) {
-      logger.info(`[bootstrap] SUPER_ADMIN already exists: ${existing[0].email}`);
+      // SUPER_ADMIN exists. If SUPERADMIN_PASSWORD is set, sync it — this makes
+      // the env var the canonical source of truth and lets the operator
+      // recover from a lost/forgotten password by just setting the var and
+      // redeploying. Safe because only platform operators with Railway access
+      // can set this env var.
+      if (password) {
+        const hash = await bcrypt.hash(password, 12);
+        await prisma.$executeRawUnsafe(
+          `UPDATE users SET password = $1, "updatedAt" = NOW() WHERE id = $2`,
+          hash,
+          existing[0].id
+        );
+        logger.info(`[bootstrap] SUPER_ADMIN password synced from env var for ${existing[0].email}`);
+      } else {
+        logger.info(`[bootstrap] SUPER_ADMIN already exists: ${existing[0].email}`);
+      }
       return;
     }
 
-    const email = process.env.SUPERADMIN_EMAIL || 'superadmin@safremanasik.com';
-    const password = process.env.SUPERADMIN_PASSWORD;
     if (!password) {
       logger.warn(
         '[bootstrap] No SUPER_ADMIN exists and SUPERADMIN_PASSWORD env var is not set — skipping creation.'

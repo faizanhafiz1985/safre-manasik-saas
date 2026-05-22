@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 const navItems = [
   // Super admin only
   { label: 'Platform Admin', icon: <SupervisorAccount />, path: '/super-admin',        roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Plans & Pricing', icon: <BarChart />,         path: '/super-admin/plans',  roles: ['SUPER_ADMIN'], section: 'platform' },
 
   // Tenant operational
   { label: 'Dashboard',      icon: <Dashboard />,         path: '/dashboard',          roles: ['ADMIN','AGENT','CUSTOMER'] },
