@@ -72,8 +72,14 @@ app.use(errorHandler);
 // Only listen when run directly (not when required by tests)
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, async () => {
     logger.info(`Safre Manasik SaaS API running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+    try {
+      const { runBootstrap } = require('./bootstrap');
+      await runBootstrap();
+    } catch (err) {
+      logger.error(`Bootstrap failed: ${err.message}`);
+    }
   });
   const shutdown = (signal) => {
     logger.info(`${signal} received. Shutting down gracefully...`);
