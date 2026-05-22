@@ -1,8 +1,15 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
+// Use same-origin /api by default — nginx in the frontend service proxies
+// /api to the backend. This avoids cross-origin SSL issues when the custom
+// API domain (api.safremanasik.com) has not yet been provisioned with a cert.
+// Override with REACT_APP_API_URL only when you specifically need a direct
+// backend URL (e.g. local dev with separate ports).
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || '/api',
+  baseURL: process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.startsWith('http://localhost')
+    ? process.env.REACT_APP_API_URL
+    : '/api',
   timeout: 30000,
 });
 
