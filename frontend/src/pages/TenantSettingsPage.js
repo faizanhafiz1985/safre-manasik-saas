@@ -162,8 +162,31 @@ export default function TenantSettingsPage() {
           <Grid item xs={12} md={3}>
             <TextField fullWidth label="Primary Colour" type="color" value={form.primaryColor} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} InputLabelProps={{ shrink: true }} />
           </Grid>
-          <Grid item xs={12}>
-            <TextField fullWidth label="Logo URL" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://..." />
+          <Grid item xs={12} md={8}>
+            <TextField
+              fullWidth
+              label="Logo URL"
+              value={form.logoUrl}
+              onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
+              placeholder="https://example.com/your-logo.png"
+              helperText="Paste a public HTTPS image URL (PNG/SVG/JPG). Once saved, your logo will replace 'Safre Manasik' across the app for users in your tenant. Leave blank to use the default platform logo."
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 2, bgcolor: '#F3F8F5', borderRadius: 2, border: '1px dashed #C9A227' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>Live preview</Typography>
+              {form.logoUrl ? (
+                <img
+                  src={form.logoUrl}
+                  alt="Your logo"
+                  style={{ maxHeight: 80, maxWidth: '100%', objectFit: 'contain' }}
+                  onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling.style.display = 'block'; }}
+                />
+              ) : null}
+              <Typography variant="caption" color="error" sx={{ display: form.logoUrl ? 'none' : 'block' }}>
+                {form.logoUrl ? 'Image failed to load' : 'No logo URL set (platform default will be used)'}
+              </Typography>
+            </Box>
           </Grid>
         </Grid>
 

@@ -126,7 +126,7 @@ const login = async (req, res, next) => {
 
     const user = await runUnscoped(() => prisma.user.findUnique({
       where: { email },
-      include: { tenant: { select: { id: true, name: true, slug: true, status: true } } },
+      include: { tenant: { select: { id: true, name: true, slug: true, status: true, plan: true, logoUrl: true, primaryColor: true } } },
     }));
     if (!user || !user.isActive) return res.status(401).json({ error: 'Invalid credentials' });
     if (user.tenant && user.tenant.status === 'SUSPENDED') {

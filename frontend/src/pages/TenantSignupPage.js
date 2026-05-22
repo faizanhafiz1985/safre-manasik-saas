@@ -6,6 +6,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import BrandLogo from '../components/BrandLogo';
 
 export default function TenantSignupPage() {
   const navigate = useNavigate();
@@ -32,9 +33,12 @@ export default function TenantSignupPage() {
       background: 'linear-gradient(160deg, #0D2B1A 0%, #1B4B35 45%, #2E6B4F 100%)', p: 2,
     }}>
       <Box sx={{ width: '100%', maxWidth: 560 }}>
+        <Box sx={{ textAlign: 'center', mb: 2.5, bgcolor: 'rgba(255,255,255,0.97)', borderRadius: 3, py: 2, px: 3, boxShadow: '0 10px 30px rgba(0,0,0,0.25)' }}>
+          <BrandLogo variant="full" maxHeight={100} />
+        </Box>
         <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <Typography variant="h4" fontWeight={700} color="#fff">Start your free trial</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>14 days, no credit card required</Typography>
+          <Typography variant="h5" fontWeight={700} color="#fff">Start your free trial</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>Starter plan • no credit card required</Typography>
         </Box>
 
         <Card sx={{ borderRadius: 3, boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>

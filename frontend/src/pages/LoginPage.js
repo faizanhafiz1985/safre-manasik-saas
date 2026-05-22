@@ -4,6 +4,7 @@ import { Box, Card, CardContent, TextField, Button, Typography, InputAdornment, 
 import { Email, Lock, Visibility, VisibilityOff } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
+import BrandLogo from '../components/BrandLogo';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -33,10 +34,15 @@ export default function LoginPage() {
       <Box sx={{ position:'absolute', width:300, height:300, borderRadius:'50%', border:'1px solid rgba(201,162,39,0.1)', bottom:-80, right:-80 }} />
 
       <Box sx={{ width: '100%', maxWidth: 440, position: 'relative', zIndex: 1 }}>
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <Typography variant="h3" sx={{ color: '#C9A227', fontWeight: 800, letterSpacing: 1 }}>Safre Manasik</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
-            Multi-Tenant SaaS Platform
+        <Box sx={{
+          textAlign: 'center', mb: 2.5,
+          bgcolor: 'rgba(255,255,255,0.97)', borderRadius: 3,
+          py: 2, px: 3,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+        }}>
+          <BrandLogo variant="full" maxHeight={110} />
+          <Typography variant="caption" sx={{ display: 'block', color: '#1B4B35', mt: 0.5, fontWeight: 600, letterSpacing: 0.5 }}>
+            UMRAH · HAJJ · TRAVEL · ZIARAAT · TOURS
           </Typography>
         </Box>
 

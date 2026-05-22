@@ -7,6 +7,7 @@ import {
   SupervisorAccount, Business,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
+import BrandLogo from '../BrandLogo';
 
 const navItems = [
   // Super admin only
@@ -57,10 +58,13 @@ export default function Sidebar({ onClose }) {
       <Box sx={{ px: 2, pt: 2, pb: 1.5, borderBottom: '1px solid rgba(201,162,39,0.25)' }}>
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
           <Box sx={{ bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2, px: 1.5, py: 1, width: '100%' }}>
-            <img src="/logo.svg" alt="Safr e Manasik" style={{ width: '100%', maxWidth: 210, display: 'block', margin: '0 auto' }}
-              onError={(e) => { e.target.style.display = 'none'; }} />
-            <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', color: '#1B4B35', fontWeight: 700, fontSize: '0.7rem' }}>
-              Safre Manasik SaaS
+            {/* BrandLogo picks the tenant's logoUrl (if set) or the platform default,
+                so a tenant who uploads their own logo sees their own brand here. */}
+            <BrandLogo variant="compact" maxWidth={210} maxHeight={75} sx={{ width: '100%' }} />
+            <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', color: '#1B4B35', fontWeight: 700, fontSize: '0.7rem', mt: 0.3 }}>
+              {user?.tenant?.name && user.tenant.name !== 'Safre Manasik'
+                ? user.tenant.name
+                : 'Safre Manasik SaaS'}
             </Typography>
           </Box>
         </Box>

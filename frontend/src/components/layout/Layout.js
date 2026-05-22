@@ -5,6 +5,7 @@ import { Menu as MenuIcon, Logout, Settings, Person } from '@mui/icons-material'
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import Sidebar from './Sidebar';
+import BrandLogo from '../BrandLogo';
 
 const DRAWER_WIDTH = 260;
 
@@ -36,12 +37,13 @@ export default function Layout() {
             </IconButton>
           )}
 
-          {/* Logo in topbar (mobile) / breadcrumb title (desktop) */}
+          {/* Logo in topbar — tenant override wins via BrandLogo. Mobile shows
+              a smaller version, desktop shows the full mark. */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-            <img src="/logo.svg" alt="Safr e Manasik" style={{ height: 38 }} />
+            <BrandLogo variant="compact" maxHeight={38} maxWidth={140} />
           </Box>
           <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
-            <img src="/logo.svg" alt="Safr e Manasik" style={{ height: 42 }} />
+            <BrandLogo variant="compact" maxHeight={48} maxWidth={200} />
           </Box>
 
           <Box sx={{ flexGrow: 1 }} />
