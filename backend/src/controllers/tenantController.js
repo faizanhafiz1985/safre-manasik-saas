@@ -1,6 +1,20 @@
 const prisma = require('../config/database');
 const { getTenantId, runWithTenant } = require('../config/tenantContext');
 const { getTenantQuota } = require('../middleware/quota');
+const { invalidateTenantPaypal } = require('../services/paypalClient');
+
+// Mask the PayPal secret in any response — never return the raw value to the
+// browser. We keep a small "tail" so the admin can recognise which key is set.
+function maskSecret(s) {
+  if (!s) return null;
+  if (s.length <= 8) return '••••';
+  return '••••••••' + s.slice(-4);
+}
+
+function sanitiseTenantForResponse(tenant) {
+  if (!tenant) return tenant;
+  return { ...tenant, paypalSecret: maskSecret(tenant.paypalSecret) };
+}
 
 // Get current tenant info (any authenticated user in the tenant)
 const getCurrent = async (req, res, next) => {
@@ -20,7 +34,7 @@ const getCurrent = async (req, res, next) => {
         } catch (e) { reject(e); }
       });
     });
-    res.json(tenant);
+    res.json(sanitiseTenantForResponse(tenant));
   } catch (err) {
     next(err);
   }
@@ -36,10 +50,25 @@ const updateCurrent = async (req, res, next) => {
       'name', 'contactEmail', 'contactPhone', 'crNumber', 'vatNumber',
       'umrahLicenseNumber', 'address', 'city', 'currency', 'timezone',
       'language', 'logoUrl', 'primaryColor',
+      // PayPal config
+      'paypalEnabled', 'paypalMode', 'paypalClientId', 'paypalSecret',
     ];
     const data = {};
     for (const f of allowedFields) {
       if (req.body[f] !== undefined) data[f] = req.body[f];
+    }
+
+    // Treat a masked secret as "no change" — when the UI loads the tenant
+    // the secret comes back as "••••••••XXXX", and if the admin saves
+    // without re-typing it we must NOT overwrite the stored value with
+    // bullets.
+    if (typeof data.paypalSecret === 'string' && data.paypalSecret.includes('•')) {
+      delete data.paypalSecret;
+    }
+    // Empty string explicitly means "clear the credential" — preserve that.
+
+    if (data.paypalMode && !['sandbox', 'live'].includes(data.paypalMode)) {
+      return res.status(400).json({ error: 'paypalMode must be "sandbox" or "live"' });
     }
 
     let tenant;
@@ -51,7 +80,11 @@ const updateCurrent = async (req, res, next) => {
         } catch (e) { reject(e); }
       });
     });
-    res.json(tenant);
+
+    // Bust the cached PayPal client so the next API call picks up the new keys
+    invalidateTenantPaypal(tenantId);
+
+    res.json(sanitiseTenantForResponse(tenant));
   } catch (err) {
     next(err);
   }

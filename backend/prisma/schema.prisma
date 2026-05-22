@@ -129,6 +129,17 @@ model Tenant {
   trialEndsAt         DateTime?
   maxUsers            Int          @default(10)
   maxBookings         Int          @default(100)
+
+  // ── Per-tenant PayPal configuration ────────────────────────────────────
+  // Each tenant supplies their own PayPal API keys via Tenant Settings.
+  // If paypalEnabled is false (or credentials are empty), the payment
+  // gateway falls back to the platform-level env vars (PAYPAL_CLIENT_ID/
+  // PAYPAL_CLIENT_SECRET). If neither is set, stub mode is used.
+  paypalEnabled       Boolean      @default(false)
+  paypalMode          String?      // "sandbox" | "live"
+  paypalClientId      String?
+  paypalSecret        String?      // stored as plaintext today; encrypt-at-rest is a follow-up
+
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 

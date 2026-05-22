@@ -8,7 +8,7 @@
 
 const prisma = require('../config/database');
 const { getTenantId } = require('../config/tenantContext');
-const { paypal, client: paypalClient, stubMode: PAYPAL_STUB, mode: PAYPAL_MODE } = require('../services/paypalClient');
+const { paypal, getPaypalForTenant } = require('../services/paypalClient');
 
 // ──────────────────────────────────────────────────────────────────────────
 // PAYPAL: Create order
@@ -33,7 +33,10 @@ const paypalCreateOrder = async (req, res, next) => {
       ? Math.round((Number(amount) / 3.75) * 100) / 100   // rough SAR→USD peg
       : Number(amount);
 
-    if (PAYPAL_STUB) {
+    // Look up THIS tenant's PayPal client (or platform fallback, or stub).
+    const { client: paypalClient, stubMode, mode: paypalMode } = await getPaypalForTenant(booking.tenantId);
+
+    if (stubMode) {
       const stubOrderId = `STUB-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
       return res.json({
         orderId: stubOrderId,
@@ -71,7 +74,7 @@ const paypalCreateOrder = async (req, res, next) => {
 
     res.json({
       orderId: order.result.id,
-      mode: PAYPAL_MODE,
+      mode: paypalMode,
       amount: finalAmount,
       currency: finalCurrency,
       approveUrl: approveLink,
@@ -95,7 +98,9 @@ const paypalCaptureOrder = async (req, res, next) => {
 
     let captureResult, capturedAmount, capturedCurrency, gatewayRef;
 
-    if (PAYPAL_STUB || orderId.startsWith('STUB-')) {
+    const { client: paypalClient, stubMode } = await getPaypalForTenant(booking.tenantId);
+
+    if (stubMode || orderId.startsWith('STUB-')) {
       // Stub mode: trust the input
       capturedAmount = Number(req.body.amount || booking.totalAmount);
       capturedCurrency = req.body.currency || booking.currency || 'SAR';
@@ -195,12 +200,17 @@ const paypalWebhook = async (req, res) => {
 // ──────────────────────────────────────────────────────────────────────────
 // PAYPAL: Get config for the frontend (client ID for PayPal JS SDK)
 // ──────────────────────────────────────────────────────────────────────────
-const paypalConfig = (req, res) => {
+const paypalConfig = async (req, res) => {
+  // If the user is authenticated, use their tenant's config; otherwise fall
+  // back to the platform-level config (mostly useful for the marketing site).
+  const tenantId = req.user?.tenantId || null;
+  const cfg = await getPaypalForTenant(tenantId);
   res.json({
-    clientId: process.env.PAYPAL_CLIENT_ID || '',
-    mode: PAYPAL_MODE,
-    stubMode: PAYPAL_STUB,
-    currency: 'USD',  // PayPal doesn't support SAR; FE converts at display time
+    clientId: cfg.clientId || '',
+    mode: cfg.mode,
+    stubMode: cfg.stubMode,
+    source: cfg.source,        // 'tenant' | 'platform' | 'stub' — useful for the UI
+    currency: 'USD',           // PayPal doesn't support SAR; FE converts at display time
   });
 };
 

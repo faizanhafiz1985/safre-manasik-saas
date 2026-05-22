@@ -26,6 +26,10 @@ const listTenants = async (req, res, next) => {
       }),
       prisma.tenant.count({ where }),
     ]);
+    // Mask PayPal secrets across the list
+    for (const t of tenants) {
+      if (t.paypalSecret) t.paypalSecret = '••••••••' + t.paypalSecret.slice(-4);
+    }
     res.json({ data: tenants, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (err) {
     next(err);
@@ -42,6 +46,8 @@ const getTenant = async (req, res, next) => {
       },
     });
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    // Never leak the PayPal secret in API responses
+    if (tenant.paypalSecret) tenant.paypalSecret = '••••••••' + tenant.paypalSecret.slice(-4);
     res.json(tenant);
   } catch (err) {
     next(err);

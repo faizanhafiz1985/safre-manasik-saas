@@ -77,28 +77,42 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <Divider sx={{ my: 3 }}><Typography variant="caption" color="text.secondary">Demo Accounts</Typography></Divider>
+            <Divider sx={{ my: 3 }}><Typography variant="caption" color="text.secondary">NEW TO SAFRE MANASIK?</Typography></Divider>
 
-            <Box sx={{ p: 2, bgcolor: '#F3F8F5', borderRadius: 2, border: '1px solid rgba(27,75,53,0.12)' }}>
-              {[
-                { role: 'Super Admin', email: 'superadmin@safremanasik.com', pass: 'Super@2026!',   color: '#9B59B6' },
-                { role: 'Tenant Admin',email: 'admin@alrashidi.sa',          pass: 'Admin@1234',    color: '#C9A227' },
-                { role: 'Agent',       email: 'agent1@alrashidi.local',      pass: 'Agent@1234',    color: '#4A90D9' },
-                { role: 'Customer',    email: 'abdullah@alrashidi.local',    pass: 'Customer@1234', color: '#2E9E6B' },
-              ].map(({ role, email, pass, color }) => (
-                <Box key={role} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
-                  <Typography variant="caption" sx={{ color: '#1B4B35', fontWeight: 700, minWidth: 95 }}>{role}:</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>{email} / {pass}</Typography>
-                </Box>
-              ))}
+            <Box sx={{ textAlign: 'center', mb: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Run an Umrah / Hajj travel agency? Create your own workspace in under 2 minutes —
+                no credit card required.
+              </Typography>
+              <Button
+                component={Link}
+                to="/signup"
+                fullWidth
+                variant="outlined"
+                size="large"
+                sx={{
+                  py: 1.3,
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  borderRadius: 2,
+                  borderWidth: 2,
+                  borderColor: '#C9A227',
+                  color: '#1B4B35',
+                  '&:hover': {
+                    borderWidth: 2,
+                    borderColor: '#C9A227',
+                    bgcolor: 'rgba(201,162,39,0.08)',
+                  },
+                }}
+              >
+                Sign Up Your Agency →
+              </Button>
             </Box>
           </CardContent>
         </Card>
 
-        <Typography variant="body2" textAlign="center" sx={{ mt: 2, color: 'rgba(255,255,255,0.6)' }}>
-          New organisation?{' '}
-          <Link to="/signup" style={{ color: '#C9A227', fontWeight: 600, textDecoration: 'none' }}>Start a free trial</Link>
+        <Typography variant="caption" textAlign="center" display="block" sx={{ mt: 2, color: 'rgba(255,255,255,0.5)' }}>
+          By signing up you agree to a free trial of the Starter plan.
         </Typography>
       </Box>
     </Box>
