@@ -2,10 +2,18 @@
 // Currently ensures a SUPER_ADMIN user exists in production.
 //
 // Controlled by env vars:
-//   SUPERADMIN_EMAIL    — defaults to superadmin@safremanasik.com
-//   SUPERADMIN_PASSWORD — REQUIRED to create. If unset, bootstrap is a no-op.
+//   SUPERADMIN_EMAIL          — defaults to superadmin@safremanasik.com
+//   SUPERADMIN_PASSWORD       — used ONLY to create the user on first boot.
+//                               Changing this var does NOT change an existing
+//                               password — use the in-app Change Password UI
+//                               or set SUPERADMIN_FORCE_RESET=true for that.
+//   SUPERADMIN_FORCE_RESET    — set to "true" to force-overwrite the existing
+//                               SUPER_ADMIN password from SUPERADMIN_PASSWORD
+//                               (recovery mode). Remove the var after resetting
+//                               so normal password changes persist across deploys.
 //
 // Safe to leave on long-term: only creates the user if no SUPER_ADMIN exists.
+// Password changes made via the app UI are never overwritten on restart.
 
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
@@ -17,6 +25,7 @@ async function ensureSuperAdmin() {
   try {
     const email = process.env.SUPERADMIN_EMAIL || 'superadmin@safremanasik.com';
     const password = process.env.SUPERADMIN_PASSWORD;
+    const forceReset = process.env.SUPERADMIN_FORCE_RESET === 'true';
 
     // Use raw queries to bypass tenant middleware
     const existing = await prisma.$queryRawUnsafe(
@@ -24,20 +33,22 @@ async function ensureSuperAdmin() {
     );
 
     if (existing && existing.length > 0) {
-      // SUPER_ADMIN exists. If SUPERADMIN_PASSWORD is set, sync it — this makes
-      // the env var the canonical source of truth and lets the operator
-      // recover from a lost/forgotten password by just setting the var and
-      // redeploying. Safe because only platform operators with Railway access
-      // can set this env var.
-      if (password) {
+      if (forceReset && password) {
+        // Explicit recovery mode: operator set SUPERADMIN_FORCE_RESET=true.
+        // Overwrite the DB password with the env var value so the operator
+        // can regain access after a forgotten password.
+        // IMPORTANT: Remove SUPERADMIN_FORCE_RESET from Railway env vars after
+        // resetting, otherwise every restart will keep overwriting the password.
         const hash = await bcrypt.hash(password, 12);
         await prisma.$executeRawUnsafe(
           `UPDATE users SET password = $1, "updatedAt" = NOW() WHERE id = $2`,
           hash,
           existing[0].id
         );
-        logger.info(`[bootstrap] SUPER_ADMIN password synced from env var for ${existing[0].email}`);
+        logger.warn(`[bootstrap] SUPER_ADMIN password FORCE-RESET from env var for ${existing[0].email}. Remove SUPERADMIN_FORCE_RESET env var after this deploy.`);
       } else {
+        // Normal operation: SUPER_ADMIN already exists, leave their password alone.
+        // Password changes made via the in-app UI will persist across restarts.
         logger.info(`[bootstrap] SUPER_ADMIN already exists: ${existing[0].email}`);
       }
       return;
