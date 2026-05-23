@@ -1,5 +1,8 @@
 const prisma = require('../config/database');
 
+// Coerce any truthy string/number to a proper boolean (form data sends "true"/"false")
+const toBool = (v) => v === undefined ? undefined : v === true || v === 'true' || v === 1 || v === '1';
+
 const packageInclude = {
   priceTiers: true,
   packageHotels: { include: { hotel: true } },
@@ -42,7 +45,12 @@ const create = async (req, res, next) => {
       return res.status(400).json({ error: 'durationDays must be a positive number' });
     const pkg = await prisma.package.create({
       data: {
-        name, description, durationDays, transportIncluded, cateringIncluded, visaIncluded, airportTransfer,
+        name, description,
+        durationDays: durationDays !== undefined ? Number(durationDays) : undefined,
+        transportIncluded: toBool(transportIncluded),
+        cateringIncluded: toBool(cateringIncluded),
+        visaIncluded: toBool(visaIncluded),
+        airportTransfer: toBool(airportTransfer),
         priceTiers: { create: priceTiers || [] },
         packageHotels: { create: (packageHotels || []).map(({ hotelId, city, nights }) => ({ hotelId, city, nights })) },
         agents: agentIds ? { connect: agentIds.map((id) => ({ id })) } : undefined,
@@ -81,12 +89,12 @@ const update = async (req, res, next) => {
       data: {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
-        ...(durationDays !== undefined && { durationDays }),
-        ...(transportIncluded !== undefined && { transportIncluded }),
-        ...(cateringIncluded !== undefined && { cateringIncluded }),
-        ...(visaIncluded !== undefined && { visaIncluded }),
-        ...(airportTransfer !== undefined && { airportTransfer }),
-        ...(isActive !== undefined && { isActive }),
+        ...(durationDays !== undefined && { durationDays: Number(durationDays) }),
+        ...(transportIncluded !== undefined && { transportIncluded: toBool(transportIncluded) }),
+        ...(cateringIncluded !== undefined && { cateringIncluded: toBool(cateringIncluded) }),
+        ...(visaIncluded !== undefined && { visaIncluded: toBool(visaIncluded) }),
+        ...(airportTransfer !== undefined && { airportTransfer: toBool(airportTransfer) }),
+        ...(isActive !== undefined && { isActive: toBool(isActive) }),
       },
     });
     if (cleanTiers.length) {
