@@ -1,31 +1,53 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Paper, Typography, Grid, Card, CardContent, Table, TableHead,
   TableBody, TableRow, TableCell, Chip, Stack, Button, IconButton, Dialog,
   DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem,
+  Tooltip, Alert, CircularProgress, Divider,
 } from '@mui/material';
-import { Business, People, BookOnline, AttachMoney, PauseCircle, PlayCircle, Edit, Visibility } from '@mui/icons-material';
+import {
+  Business, People, BookOnline, AttachMoney, PauseCircle, PlayCircle, Edit,
+  BugReport, CheckCircle, Warning, Error as ErrorIcon, Refresh, OpenInNew,
+  Email, Payment, AdminPanelSettings, HealthAndSafety,
+} from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 
 const statusColor = { ACTIVE: 'success', TRIAL: 'warning', SUSPENDED: 'error', CANCELLED: 'default' };
 const planColor   = { STARTER: 'info', GROWTH: 'primary', ENTERPRISE: 'secondary' };
 
-export default function SuperAdminDashboardPage() {
-  const [stats, setStats] = useState(null);
-  const [tenants, setTenants] = useState([]);
-  const [editTenant, setEditTenant] = useState(null);
+const checkIcon = (status) => {
+  if (status === 'pass') return <CheckCircle sx={{ fontSize: 16, color: '#2E9E6B' }} />;
+  if (status === 'warn') return <Warning sx={{ fontSize: 16, color: '#C9A227' }} />;
+  return <ErrorIcon sx={{ fontSize: 16, color: '#C0392B' }} />;
+};
 
-  const load = async () => {
+export default function SuperAdminDashboardPage() {
+  const [stats, setStats]       = useState(null);
+  const [tenants, setTenants]   = useState([]);
+  const [editTenant, setEditTenant] = useState(null);
+  const [diag, setDiag]         = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  const load = useCallback(async () => {
     const [s, t] = await Promise.all([
       api.get('/super-admin/stats'),
       api.get('/super-admin/tenants'),
     ]);
     setStats(s.data);
     setTenants(t.data.data);
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  const loadDiag = useCallback(async () => {
+    setDiagLoading(true);
+    try {
+      const r = await api.get('/super-admin/diagnostics');
+      setDiag(r.data);
+    } catch { /* silent */ }
+    finally { setDiagLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); loadDiag(); }, [load, loadDiag]);
 
   const suspend = async (id) => {
     await api.post(`/super-admin/tenants/${id}/suspend`);
@@ -83,6 +105,136 @@ export default function SuperAdminDashboardPage() {
           </Grid>
         ))}
       </Grid>
+
+      {/* ── Monitoring & Integration Health ─────────────────────────── */}
+      <Paper sx={{ mb: 3, overflow: 'hidden' }}>
+        <Box sx={{ p: 2, bgcolor: '#F3F8F5', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <HealthAndSafety sx={{ color: '#1B4B35' }} />
+            <Typography variant="h6" fontWeight={700}>System Health &amp; Monitoring</Typography>
+            {diag && (
+              <Chip
+                size="small"
+                label={diag.overall.toUpperCase()}
+                color={diag.overall === 'healthy' ? 'success' : diag.overall === 'degraded' ? 'warning' : 'error'}
+              />
+            )}
+          </Stack>
+          <Tooltip title="Refresh diagnostics">
+            <IconButton size="small" onClick={loadDiag} disabled={diagLoading}>
+              {diagLoading ? <CircularProgress size={16} /> : <Refresh fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {!diag && diagLoading && (
+          <Box sx={{ p: 3, textAlign: 'center' }}><CircularProgress size={24} /></Box>
+        )}
+
+        {diag && (
+          <Box sx={{ p: 2 }}>
+            {/* Integration status cards */}
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              {[
+                {
+                  key: 'sentry',
+                  label: 'Error Monitoring',
+                  icon: <BugReport />,
+                  check: diag.checks.find((c) => c.name === 'sentry.monitoring'),
+                  color: '#8B5CF6',
+                  action: process.env.REACT_APP_SENTRY_URL
+                    ? { label: 'Open Sentry', url: process.env.REACT_APP_SENTRY_URL }
+                    : { label: 'Setup Sentry', url: 'https://sentry.io/signup/' },
+                },
+                {
+                  key: 'email',
+                  label: 'Email (SMTP)',
+                  icon: <Email />,
+                  check: diag.checks.find((c) => c.name === 'email.smtp'),
+                  color: '#0EA5E9',
+                  action: { label: 'Get Resend', url: 'https://resend.com' },
+                },
+                {
+                  key: 'paypal',
+                  label: 'PayPal Gateway',
+                  icon: <Payment />,
+                  check: diag.checks.find((c) => c.name === 'paypal.platform'),
+                  color: '#003087',
+                  action: { label: 'PayPal Dev', url: 'https://developer.paypal.com/dashboard' },
+                },
+                {
+                  key: 'db',
+                  label: 'Database',
+                  icon: <AdminPanelSettings />,
+                  check: diag.checks.find((c) => c.name === 'database.connection'),
+                  color: '#336791',
+                },
+              ].map(({ key, label, icon, check, color, action }) => (
+                <Grid item xs={12} sm={6} md={3} key={key}>
+                  <Card variant="outlined" sx={{ borderLeft: `4px solid ${color}`, height: '100%' }}>
+                    <CardContent sx={{ py: 1.5, pb: '12px !important' }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                        <Box sx={{ color }}>{icon}</Box>
+                        <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" letterSpacing={0.5}>{label}</Typography>
+                      </Stack>
+                      {check ? (
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          {checkIcon(check.status)}
+                          <Typography variant="body2" fontWeight={600} color={check.status === 'pass' ? '#2E9E6B' : check.status === 'warn' ? '#C9A227' : '#C0392B'}>
+                            {check.status === 'pass' ? 'Operational' : check.status === 'warn' ? 'Warning' : 'Failed'}
+                          </Typography>
+                        </Stack>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Checking…</Typography>
+                      )}
+                      {check?.detail && (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, lineHeight: 1.3 }}>
+                          {check.detail}
+                        </Typography>
+                      )}
+                      {action && (
+                        <Button
+                          size="small"
+                          endIcon={<OpenInNew sx={{ fontSize: 12 }} />}
+                          href={action.url}
+                          target="_blank"
+                          rel="noopener"
+                          sx={{ mt: 1, p: 0, minWidth: 0, fontSize: 11, color }}
+                        >
+                          {action.label}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Diagnostics detail */}
+            <Divider sx={{ mb: 1.5 }} />
+            <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase" letterSpacing={0.5}>
+              All Checks ({diag.summary.pass} pass · {diag.summary.warn} warn · {diag.summary.fail} fail) · {diag.elapsedMs}ms
+            </Typography>
+            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {diag.checks.map((c) => (
+                <Tooltip key={c.name} title={c.detail || ''} arrow>
+                  <Chip
+                    size="small"
+                    icon={checkIcon(c.status)}
+                    label={c.name}
+                    variant="outlined"
+                    sx={{
+                      borderColor: c.status === 'pass' ? '#2E9E6B' : c.status === 'warn' ? '#C9A227' : '#C0392B',
+                      color: c.status === 'pass' ? '#2E9E6B' : c.status === 'warn' ? '#C9A227' : '#C0392B',
+                      fontSize: 11,
+                    }}
+                  />
+                </Tooltip>
+              ))}
+            </Box>
+          </Box>
+        )}
+      </Paper>
 
       <Paper sx={{ overflow: 'hidden' }}>
         <Box sx={{ p: 2, bgcolor: '#F3F8F5', borderBottom: '1px solid #ddd' }}>

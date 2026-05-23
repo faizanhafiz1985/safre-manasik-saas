@@ -66,6 +66,8 @@ const generateVoucher = async (req, res, next) => {
   }
 };
 
+const tenantSelect = { select: { name: true, vatNumber: true, crNumber: true, contactPhone: true, contactEmail: true } };
+
 const downloadVoucher = async (req, res, next) => {
   try {
     const voucher = await prisma.voucher.findFirst({
@@ -74,7 +76,10 @@ const downloadVoucher = async (req, res, next) => {
     });
     if (!voucher) return res.status(404).json({ error: 'Voucher not found' });
 
-    const html = await getVoucherHtml(voucher.booking, voucher.type, voucher.voucherNo);
+    const tenant = voucher.booking.tenantId
+      ? await prisma.tenant.findUnique({ where: { id: voucher.booking.tenantId }, ...tenantSelect })
+      : {};
+    const html = await getVoucherHtml(voucher.booking, voucher.type, voucher.voucherNo, tenant || {});
     const typeLabel = voucher.type === 'CONFIRMED' ? 'confirmed-voucher' : 'tentative-voucher';
     const filename = `${typeLabel}-${voucher.voucherNo || voucher.booking.bookingRef}`;
 
@@ -111,9 +116,12 @@ const previewVoucher = async (req, res, next) => {
     const booking = await prisma.booking.findFirst({ where: { id: req.params.bookingId }, include: bookingInclude });
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
+    const tenant = booking.tenantId
+      ? await prisma.tenant.findUnique({ where: { id: booking.tenantId }, ...tenantSelect })
+      : {};
     const type = (req.query.type || booking.status).toUpperCase();
     const voucherNo = req.query.voucherNo || null;
-    const html = await getVoucherHtml(booking, type, voucherNo);
+    const html = await getVoucherHtml(booking, type, voucherNo, tenant || {});
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);

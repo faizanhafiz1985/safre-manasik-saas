@@ -326,8 +326,6 @@ const approveApplication = async (req, res, next) => {
     }
     if (suffix) slug = `${slug}-${suffix}`;
 
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-
     // Atomic: create tenant + user + mark application APPROVED.
     const result = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
@@ -341,8 +339,7 @@ const approveApplication = async (req, res, next) => {
           umrahLicenseNumber: app.umrahLicenseNumber,
           city: app.city,
           country: app.country || 'Saudi Arabia',
-          status: 'TRIAL',
-          trialEndsAt,
+          status: 'ACTIVE',
         },
       });
       const user = await tx.user.create({

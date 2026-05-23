@@ -106,7 +106,14 @@ const diagnostics = async (req, res, next) => {
     warn('applications.pending', { detail: `Could not check: ${err.message}` });
   }
 
-  // 7. Process / runtime info
+  // 7. Sentry error monitoring
+  if (process.env.SENTRY_DSN) {
+    pass('sentry.monitoring', { detail: 'Sentry DSN configured — backend errors are tracked and alerted in real time' });
+  } else {
+    warn('sentry.monitoring', { detail: 'SENTRY_DSN not set — errors logged to Railway only, no alerting. Set SENTRY_DSN in Railway env vars to enable.' });
+  }
+
+  // 8. Process / runtime info
   const uptimeS = Math.floor(process.uptime());
   pass('runtime', {
     detail: `node ${process.version} · uptime ${Math.floor(uptimeS/3600)}h${Math.floor((uptimeS%3600)/60)}m · mem ${Math.round(process.memoryUsage().rss/1024/1024)}MB · cpus ${os.cpus().length}`,
@@ -139,6 +146,7 @@ const diagnostics = async (req, res, next) => {
         envFlag('SMTP_PASS'),
         envFlag('PAYPAL_CLIENT_ID'),
         envFlag('PAYPAL_CLIENT_SECRET'),
+        envFlag('SENTRY_DSN'),
       ],
     },
   });

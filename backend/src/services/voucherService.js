@@ -12,9 +12,10 @@ const encodeTlvField = (tag, value) => {
   ]);
 };
 
-const buildZatcaQrData = (booking, vatAmount) => {
-  const sellerName   = 'Safre Manasik Travel Agency';
-  const vatRegNumber = '300000000000003';            // replace with real VAT No.
+// tenant: { name, vatNumber } — falls back to platform values if not supplied
+const buildZatcaQrData = (booking, vatAmount, tenant = {}) => {
+  const sellerName   = tenant.name    || 'Safre Manasik Travel Agency';
+  const vatRegNumber = tenant.vatNumber || '300000000000003';
   const timestamp    = new Date().toISOString();
   const totalWithVat = Number(booking.totalAmount || 0).toFixed(2);
   const vat          = Number(vatAmount || 0).toFixed(2);
@@ -28,11 +29,11 @@ const buildZatcaQrData = (booking, vatAmount) => {
   ]).toString('base64');
 };
 
-const generateZatcaQrDataUrl = async (booking) => {
+const generateZatcaQrDataUrl = async (booking, tenant = {}) => {
   const vatRate = 0.15;                              // 15% KSA VAT
   const base    = Number(booking.totalAmount || 0);
   const vat     = +(base * vatRate).toFixed(2);
-  const tlvB64  = buildZatcaQrData(booking, vat);
+  const tlvB64  = buildZatcaQrData(booking, vat, tenant);
   return QRCode.toDataURL(tlvB64, { errorCorrectionLevel: 'M', margin: 1, width: 120 });
 };
 
@@ -100,7 +101,8 @@ const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 200" 
 if (!LOGO_HTML) LOGO_HTML = LOGO_SVG;
 
 // ── Main voucher HTML generator ─────────────────────────────────────────────
-const getVoucherHtml = async (booking, type, voucherNo) => {
+// tenant: { name, vatNumber, crNumber, contactPhone, contactEmail } (all optional)
+const getVoucherHtml = async (booking, type, voucherNo, tenant = {}) => {
   const isConfirmed  = type === 'CONFIRMED';
   const statusColor  = isConfirmed ? '#1B4B35' : '#B8860B';
   const statusBg     = isConfirmed ? '#1B4B35' : '#C9A227';
@@ -113,7 +115,7 @@ const getVoucherHtml = async (booking, type, voucherNo) => {
   const vatAmt   = +(base * vatRate).toFixed(2);
   const total    = +(base + vatAmt).toFixed(2);
 
-  const qrDataUrl = await generateZatcaQrDataUrl(booking);
+  const qrDataUrl = await generateZatcaQrDataUrl(booking, tenant);
 
   const formatDate     = (d) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
   const formatCurrency = (n) => `SAR ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
@@ -330,16 +332,16 @@ const getVoucherHtml = async (booking, type, voucherNo) => {
       <div class="zatca-box">
         <div class="zatca-title">ZATCA e-Invoice QR</div>
         <img src="${qrDataUrl}" alt="ZATCA QR Code" style="width:110px;height:110px;" />
-        <div class="zatca-sub">Scan to verify invoice<br>VAT No: 300000000000003</div>
+        <div class="zatca-sub">Scan to verify invoice<br>VAT No: ${tenant.vatNumber || '300000000000003'}</div>
       </div>
     </div>
 
     <!-- Footer -->
     <div class="footer">
       <div>
-        <div class="footer-note"><strong>Safre Manasik Travel Agency</strong> — CR No. 7053347410</div>
-        <div class="footer-note">Tel: +966-11-000-0000 | Email: info@safremanasik.com</div>
-        <div class="footer-note">VAT Registration No: 300000000000003 | Registered in KSA</div>
+        <div class="footer-note"><strong>${tenant.name || 'Safre Manasik Travel Agency'}</strong>${tenant.crNumber ? ' — CR No. ' + tenant.crNumber : ' — CR No. 7053347410'}</div>
+        <div class="footer-note">${tenant.contactPhone ? 'Tel: ' + tenant.contactPhone + ' | ' : ''}Email: ${tenant.contactEmail || 'info@safremanasik.com'}</div>
+        <div class="footer-note">VAT Registration No: ${tenant.vatNumber || '300000000000003'} | Registered in KSA</div>
         <div class="footer-note">Generated: ${formatDate(new Date())}</div>
       </div>
       <div class="sig-line">Authorized Signature</div>
@@ -360,7 +362,7 @@ const getVoucherHtml = async (booking, type, voucherNo) => {
 };
 
 // ── Receipt Voucher ─────────────────────────────────────────────────────────
-const getReceiptHtml = async (payment, booking, receiptNo) => {
+const getReceiptHtml = async (payment, booking, receiptNo, tenant = {}) => {
   const formatDate     = (d) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
   const formatCurrency = (n) => `SAR ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
@@ -496,22 +498,30 @@ const getReceiptHtml = async (payment, booking, receiptNo) => {
 
     ${payment.notes ? `<div class="section"><h3>Notes</h3><p style="font-size:11px;color:#475569;padding:6px 0;">${payment.notes}</p></div>` : ''}
 
-    <div class="footer">
-      <div>
-        <div class="footer-note"><strong>Safre Manasik Travel Agency</strong> — CR No. 7053347410</div>
-        <div class="footer-note">Tel: +966-11-000-0000 | Email: info@safremanasik.com</div>
-        <div class="footer-note">VAT Registration No: 300000000000003 | Registered in KSA</div>
-        <div class="footer-note">Generated: ${formatDate(new Date())}</div>
+    <!-- ZATCA QR + Footer -->
+    <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end;margin-bottom:14px;">
+      <div class="footer">
+        <div>
+          <div class="footer-note"><strong>${tenant.name || 'Safre Manasik Travel Agency'}</strong>${tenant.crNumber ? ' — CR No. ' + tenant.crNumber : ' — CR No. 7053347410'}</div>
+          <div class="footer-note">${tenant.contactPhone ? 'Tel: ' + tenant.contactPhone + ' | ' : ''}Email: ${tenant.contactEmail || 'info@safremanasik.com'}</div>
+          <div class="footer-note">VAT Registration No: ${tenant.vatNumber || '300000000000003'} | Registered in KSA</div>
+          <div class="footer-note">Generated: ${formatDate(new Date())}</div>
+        </div>
+        <div style="display:flex;gap:20px;align-items:center;">
+          <div class="stamp">SAFRE<br>MANASIK<br>PAID<br>${paidAt.getFullYear()}</div>
+          <div class="sig-line">Authorized Signature</div>
+        </div>
       </div>
-      <div style="display:flex;gap:20px;align-items:center;">
-        <div class="stamp">SAFRE<br>MANASIK<br>PAID<br>${paidAt.getFullYear()}</div>
-        <div class="sig-line">Authorized Signature</div>
+      <div style="text-align:center;border:1.5px solid #e2e8f0;border-radius:6px;padding:8px 10px;background:#fafafa;min-width:130px;">
+        <div style="font-size:8px;font-weight:700;color:#1B4B35;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">ZATCA e-Invoice QR</div>
+        <img src="${await generateZatcaQrDataUrl({ totalAmount: invoice?.totalAmount ?? booking.totalAmount }, tenant)}" alt="ZATCA QR" style="width:100px;height:100px;" />
+        <div style="font-size:7px;color:#94a3b8;margin-top:4px;">Scan to verify receipt<br>VAT No: ${tenant.vatNumber || '300000000000003'}</div>
       </div>
     </div>
 
     <div class="terms">
       <strong>Payment Confirmation:</strong> This receipt confirms that the above payment has been received.
-      Please retain this receipt for your records. For queries contact info@safremanasik.com.
+      Please retain this receipt for your records. For queries contact ${tenant.contactEmail || 'info@safremanasik.com'}.
     </div>
 
   </div>

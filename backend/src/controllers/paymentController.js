@@ -99,13 +99,19 @@ const getInvoice = async (req, res, next) => {
   }
 };
 
+const tenantSelect = { select: { name: true, vatNumber: true, crNumber: true, contactPhone: true, contactEmail: true } };
+
+const getTenant = async (booking) =>
+  booking?.tenantId ? (await prisma.tenant.findUnique({ where: { id: booking.tenantId }, ...tenantSelect })) || {} : {};
+
 const previewReceipt = async (req, res, next) => {
   try {
     const payment = await prisma.payment.findFirst({ where: { id: req.params.id } });
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
     const booking = await prisma.booking.findFirst({ where: { id: payment.bookingId }, include: bookingInclude });
+    const tenant  = await getTenant(booking);
     const receiptNo = await generateReceiptNo();
-    const html = await getReceiptHtml(payment, booking, receiptNo);
+    const html = await getReceiptHtml(payment, booking, receiptNo, tenant);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (err) {
@@ -118,8 +124,9 @@ const downloadReceipt = async (req, res, next) => {
     const payment = await prisma.payment.findFirst({ where: { id: req.params.id } });
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
     const booking = await prisma.booking.findFirst({ where: { id: payment.bookingId }, include: bookingInclude });
+    const tenant  = await getTenant(booking);
     const receiptNo = await generateReceiptNo();
-    const html = await getReceiptHtml(payment, booking, receiptNo);
+    const html = await getReceiptHtml(payment, booking, receiptNo, tenant);
     const filename = `receipt-${receiptNo}`;
     try {
       const puppeteer = require('puppeteer');

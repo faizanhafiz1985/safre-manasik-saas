@@ -1,4 +1,17 @@
 require('dotenv').config();
+
+// ── Sentry (optional — only initialises when SENTRY_DSN env var is set) ──────
+const Sentry = (() => { try { return require('@sentry/node'); } catch { return null; } })();
+if (Sentry && process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'production',
+    tracesSampleRate: 0.1,
+    // Capture unhandled promise rejections
+    integrations: [new Sentry.Integrations.Http({ tracing: true })],
+  });
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -27,6 +40,11 @@ const reportRoutes = require('./routes/reports');
 const paymentGatewayRoutes = require('./routes/paymentGateway');
 
 const app = express();
+
+// Sentry request handler must be FIRST middleware
+if (Sentry && process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.requestHandler());
+}
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
@@ -67,6 +85,10 @@ app.use('/api/config', configRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 app.use(notFound);
+// Sentry error handler must come BEFORE the generic error handler
+if (Sentry && process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.errorHandler());
+}
 app.use(errorHandler);
 
 // Only listen when run directly (not when required by tests)
