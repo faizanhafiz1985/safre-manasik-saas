@@ -47,6 +47,8 @@ const getOne = async (req, res, next) => {
 const create = async (req, res, next) => {
   try {
     const { name, email, password, role, phone, companyName, address, customerType, crNumber, vatNumber } = req.body;
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'Name is required' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email is required' });
     // Check globally for email uniqueness (email is unique across all tenants)
     let existing;
     await new Promise((resolve, reject) => {

@@ -37,6 +37,9 @@ const getOne = async (req, res, next) => {
 const create = async (req, res, next) => {
   try {
     const { name, description, durationDays, transportIncluded, cateringIncluded, visaIncluded, airportTransfer, priceTiers, packageHotels, agentIds } = req.body;
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'Package name is required' });
+    if (durationDays !== undefined && (isNaN(Number(durationDays)) || Number(durationDays) < 1))
+      return res.status(400).json({ error: 'durationDays must be a positive number' });
     const pkg = await prisma.package.create({
       data: {
         name, description, durationDays, transportIncluded, cateringIncluded, visaIncluded, airportTransfer,
