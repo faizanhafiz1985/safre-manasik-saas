@@ -162,11 +162,55 @@ function superAdminNewApplicationHtml({ application }) {
     </div>`;
 }
 
+function customerWelcomeHtml({ adminName, customerName, email, password, loginUrl, tenantName }) {
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1B4B35">
+      <div style="background:#1B4B35;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0">
+        <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
+        <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8)">${tenantName}</p>
+      </div>
+      <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
+        <p>Dear ${customerName},</p>
+        <p>Your account has been created on <strong>${tenantName}</strong>'s Safre Manasik portal by ${adminName}.</p>
+        <p style="background:#F3F8F5;padding:14px 18px;border-radius:8px;border-left:4px solid #C9A227">
+          <strong>Your login details:</strong><br>
+          <span style="color:#555">Email:</span> <strong>${email}</strong><br>
+          <span style="color:#555">Password:</span> <strong>${password}</strong>
+        </p>
+        <p style="text-align:center;margin:24px 0">
+          <a href="${loginUrl}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:bold;display:inline-block">Sign In Now</a>
+        </p>
+        <p style="color:#C0392B;font-size:13px">Please change your password after your first login for security.</p>
+        <p style="margin-top:24px;color:#888;font-size:12px">Safre Manasik · Umrah Travel Management Platform</p>
+      </div>
+    </div>`;
+}
+
+function passwordResetHtml({ name, resetUrl }) {
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1B4B35">
+      <div style="background:#1B4B35;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0">
+        <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
+      </div>
+      <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
+        <p>Dear ${name},</p>
+        <p>We received a request to reset the password for your Safre Manasik account.</p>
+        <p style="text-align:center;margin:28px 0">
+          <a href="${resetUrl}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:bold;font-size:15px;display:inline-block">Reset My Password</a>
+        </p>
+        <p style="color:#888;font-size:13px">This link expires in <strong>1 hour</strong>. If you didn't request a password reset, you can safely ignore this email — your password will not change.</p>
+        <p style="margin-top:24px;color:#888;font-size:12px">Safre Manasik · Umrah Travel Management Platform</p>
+      </div>
+    </div>`;
+}
+
 module.exports = {
   sendEmail,
   applicationReceivedHtml,
   applicationApprovedHtml,
   applicationRejectedHtml,
   superAdminNewApplicationHtml,
+  customerWelcomeHtml,
+  passwordResetHtml,
   CONFIGURED,
 };

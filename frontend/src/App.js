@@ -31,6 +31,8 @@ import SuperAdminHotelsPage from './pages/SuperAdminHotelsPage';
 import TenantSettingsPage from './pages/TenantSettingsPage';
 import PaymentStubPage from './pages/PaymentStubPage';
 import PayPalSuccessPage from './pages/PayPalSuccessPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -53,6 +55,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/signup" element={<TenantSignupPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/payment/stub" element={<PrivateRoute><PaymentStubPage /></PrivateRoute>} />
         <Route path="/payment/paypal/success" element={<PrivateRoute><PayPalSuccessPage /></PrivateRoute>} />
         <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>

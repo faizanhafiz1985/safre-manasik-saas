@@ -67,7 +67,7 @@ export default function LoginPage() {
                 error={!!errors.email} helperText={errors.email?.message}
                 {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+$/i, message: 'Invalid email' } })}
               />
-              <TextField fullWidth label="Password" type={showPassword ? 'text' : 'password'} sx={{ mb: 3 }}
+              <TextField fullWidth label="Password" type={showPassword ? 'text' : 'password'} sx={{ mb: 1 }}
                 InputProps={{
                   startAdornment: <InputAdornment position="start"><Lock fontSize="small" sx={{ color: '#1B4B35' }} /></InputAdornment>,
                   endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">{showPassword ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>,
@@ -75,6 +75,11 @@ export default function LoginPage() {
                 error={!!errors.password} helperText={errors.password?.message}
                 {...register('password', { required: 'Password is required' })}
               />
+              <Box sx={{ textAlign: 'right', mb: 2.5 }}>
+                <Link to="/forgot-password" style={{ fontSize: '0.82rem', color: '#1B4B35', fontWeight: 600, textDecoration: 'none' }}>
+                  Forgot password?
+                </Link>
+              </Box>
               <Button type="submit" fullWidth variant="contained" size="large" disabled={loading}
                 sx={{ py: 1.4, fontSize: '1rem', fontWeight: 700, borderRadius: 2,
                   background: 'linear-gradient(135deg, #2E6B4F 0%, #1B4B35 100%)',

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../config/database');
 const { runWithTenant } = require('../config/tenantContext');
+const { sendEmail, customerWelcomeHtml } = require('../services/emailService');
 
 const getAll = async (req, res, next) => {
   try {
@@ -62,12 +63,37 @@ const create = async (req, res, next) => {
       });
     });
     if (existing) return res.status(409).json({ error: 'Email already registered' });
-    const hash = await bcrypt.hash(password || 'Temp@1234', 12);
+    const plainPassword = password || 'Temp@1234';
+    const hash = await bcrypt.hash(plainPassword, 12);
     const user = await prisma.user.create({
       data: { name, email, password: hash, role: allowedRole, phone, companyName, address, customerType, crNumber, vatNumber },
-      select: { id: true, name: true, email: true, role: true, phone: true, companyName: true, customerType: true, crNumber: true, vatNumber: true, isActive: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, phone: true, companyName: true, customerType: true, crNumber: true, vatNumber: true, isActive: true, createdAt: true, tenantId: true },
     });
-    res.status(201).json(user);
+
+    // Send welcome email for CUSTOMER-role users so they know their login details.
+    // Fire-and-forget — don't let email failure block the API response.
+    if (allowedRole === 'CUSTOMER') {
+      // Fetch tenant name for the email greeting
+      const tenantRecord = user.tenantId
+        ? await prisma.tenant.findFirst({ where: { id: user.tenantId }, select: { name: true } }).catch(() => null)
+        : null;
+      const loginUrl = `${process.env.FRONTEND_URL || 'https://app.safremanasik.com'}/login`;
+      sendEmail({
+        to: email,
+        subject: `Your Safre Manasik account is ready — ${tenantRecord?.name || 'Safre Manasik'}`,
+        html: customerWelcomeHtml({
+          adminName: req.user?.name || 'Your administrator',
+          customerName: name,
+          email,
+          password: plainPassword,
+          loginUrl,
+          tenantName: tenantRecord?.name || 'Safre Manasik',
+        }),
+      }).catch(() => {});
+    }
+
+    const { tenantId: _, ...safeUser } = user;
+    res.status(201).json(safeUser);
   } catch (err) {
     next(err);
   }

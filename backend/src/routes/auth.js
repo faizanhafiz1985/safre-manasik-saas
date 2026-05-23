@@ -19,6 +19,14 @@ router.post('/login',
   [body('email').isEmail(), body('password').notEmpty()],
   validate, ctrl.login);
 
+// Forgot / reset password (no auth required — user is locked out)
+router.post('/forgot-password',
+  [body('email').isEmail()],
+  validate, ctrl.forgotPassword);
+router.post('/reset-password',
+  [body('token').notEmpty(), body('newPassword').isLength({ min: 6 })],
+  validate, ctrl.resetPassword);
+
 router.get('/me', authenticate, tenantScope, ctrl.me);
 router.put('/profile', authenticate, tenantScope, ctrl.updateProfile);
 router.put('/change-password', authenticate, tenantScope,

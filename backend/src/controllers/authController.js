@@ -6,6 +6,7 @@ const {
   sendEmail,
   applicationReceivedHtml,
   superAdminNewApplicationHtml,
+  passwordResetHtml,
 } = require('../services/emailService');
 
 const generateToken = (user) =>
@@ -249,4 +250,88 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
-module.exports = { signupTenant, register, login, me, changePassword, updateProfile };
+// ─── Forgot password: sends a time-limited reset link by email ───────────────
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+
+    // Look up user globally (not tenant-scoped) — same as login
+    const user = await runUnscoped(() => prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true, email: true, isActive: true },
+    }));
+
+    // Always return 200 so attackers can't enumerate emails
+    if (!user || !user.isActive) {
+      return res.json({ message: 'If that email is registered you will receive a reset link shortly.' });
+    }
+
+    // JWT-based reset token — stateless, no DB column needed.
+    // Includes purpose flag so it can't be mistaken for a login token.
+    const resetToken = jwt.sign(
+      { id: user.id, purpose: 'password-reset' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://app.safremanasik.com';
+    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    await sendEmail({
+      to: user.email,
+      subject: 'Reset your Safre Manasik password',
+      html: passwordResetHtml({ name: user.name, resetUrl }),
+    });
+
+    res.json({ message: 'If that email is registered you will receive a reset link shortly.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Reset password: validates token and sets new password ───────────────────
+const resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token) return res.status(400).json({ error: 'Reset token is required' });
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      return res.status(400).json({ error: 'Reset link is invalid or has expired. Please request a new one.' });
+    }
+
+    if (decoded.purpose !== 'password-reset') {
+      return res.status(400).json({ error: 'Invalid reset token.' });
+    }
+
+    // Confirm user still exists and is active
+    const user = await runUnscoped(() => prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, isActive: true },
+    }));
+    if (!user || !user.isActive) {
+      return res.status(400).json({ error: 'Account not found or disabled.' });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    await runUnscoped(() => prisma.$executeRawUnsafe(
+      `UPDATE users SET password = $1, "updatedAt" = NOW() WHERE id = $2`,
+      hash,
+      user.id
+    ));
+
+    res.json({ message: 'Password reset successfully. You can now log in with your new password.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { signupTenant, register, login, me, changePassword, updateProfile, forgotPassword, resetPassword };
