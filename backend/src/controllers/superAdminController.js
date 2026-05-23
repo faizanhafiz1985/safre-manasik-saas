@@ -430,6 +430,93 @@ const rejectApplication = async (req, res, next) => {
   }
 };
 
+// ─── Hotel seed data ─────────────────────────────────────────────────────────
+// Curated list of 4★/5★ hotels near Masjid al-Haram (Makkah) and
+// Masjid an-Nabawi (Madinah) — the properties Umrah agencies book most often.
+const HOTEL_SEED_DATA = [
+  // ── MAKKAH ──────────────────────────────────────────────────────────────
+  { name: 'Fairmont Makkah Clock Royal Tower',       city: 'MAKKAH', stars: 5, distanceToHaramMeters: 50,  address: 'Abraj Al Bait Towers, Makkah 24231', amenities: ['Direct Haram view','Shuttle','Multiple restaurants','Prayer rooms','Concierge','Spa','Pool','Laundry'] },
+  { name: 'Raffles Makkah Palace',                   city: 'MAKKAH', stars: 5, distanceToHaramMeters: 100, address: 'Abraj Al Bait Towers, Makkah 24231', amenities: ['Haram view','Butler service','Fine dining','Spa','Prayer rooms','Concierge'] },
+  { name: 'Pullman ZamZam Makkah',                   city: 'MAKKAH', stars: 5, distanceToHaramMeters: 50,  address: 'Abraj Al Bait Towers, Makkah 24231', amenities: ['Haram view','Shuttle','Restaurants','Prayer rooms','Fitness centre','Concierge'] },
+  { name: 'Mövenpick Hotel & Residences Hajar Tower Makkah', city: 'MAKKAH', stars: 5, distanceToHaramMeters: 150, address: 'Abraj Al Bait Towers, Makkah 24231', amenities: ['Haram view','Shuttle','Swiss restaurant','Prayer rooms','Business centre'] },
+  { name: 'Swissôtel Makkah',                        city: 'MAKKAH', stars: 5, distanceToHaramMeters: 150, address: 'Abraj Al Bait Towers, Makkah 24231', amenities: ['Haram view','Multiple outlets','Prayer rooms','Fitness centre','Concierge'] },
+  { name: 'Conrad Makkah',                           city: 'MAKKAH', stars: 5, distanceToHaramMeters: 200, address: 'Jabal Omar, Makkah 24231',           amenities: ['Shuttle','Rooftop pool','Multiple restaurants','Prayer rooms','Spa'] },
+  { name: 'Hilton Suites Makkah',                    city: 'MAKKAH', stars: 5, distanceToHaramMeters: 300, address: 'Jabal Omar, Makkah 24231',           amenities: ['Shuttle','Kitchen suites','Prayer rooms','Fitness centre','Concierge'] },
+  { name: 'Al Marwa Rayhaan by Rotana Makkah',       city: 'MAKKAH', stars: 5, distanceToHaramMeters: 300, address: 'Ibrahim Al Khalil Street, Makkah',   amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Anjum Hotel Makkah',                      city: 'MAKKAH', stars: 5, distanceToHaramMeters: 400, address: 'Ibrahim Al Khalil Street, Makkah',   amenities: ['Shuttle','Multiple restaurants','Prayer rooms','Spa','Pool','Fitness'] },
+  { name: 'InterContinental Dar Al Tawhid Makkah',   city: 'MAKKAH', stars: 5, distanceToHaramMeters: 400, address: 'Ibrahim Al Khalil Street, Makkah',   amenities: ['Shuttle','Fine dining','Prayer rooms','Business centre','Concierge'] },
+  { name: 'Millennium Makkah Al Naseem Hotel',       city: 'MAKKAH', stars: 5, distanceToHaramMeters: 400, address: 'Ajyad Street, Makkah 24231',         amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Grand Millennium Makkah',                 city: 'MAKKAH', stars: 5, distanceToHaramMeters: 500, address: 'Ibrahim Al Khalil Road, Makkah',     amenities: ['Shuttle','Multiple restaurants','Prayer rooms','Spa','Pool'] },
+  { name: 'Jabal Omar Marriott Hotel Makkah',        city: 'MAKKAH', stars: 5, distanceToHaramMeters: 600, address: 'Jabal Omar, Makkah 24231',           amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Pool','Concierge'] },
+  { name: 'Hyatt Regency Makkah Jabal Omar',         city: 'MAKKAH', stars: 5, distanceToHaramMeters: 700, address: 'Jabal Omar, Makkah 24231',           amenities: ['Shuttle','Rooftop restaurant','Prayer rooms','Fitness','Spa','Concierge'] },
+  { name: 'Le Méridien Towers Makkah',               city: 'MAKKAH', stars: 5, distanceToHaramMeters: 800, address: 'Ajyad Street, Makkah 24231',         amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Sheraton Makkah Jabal Al Kaaba Hotel',    city: 'MAKKAH', stars: 4, distanceToHaramMeters: 700, address: 'Jabal Al Kaaba, Makkah 24231',       amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Radisson Blu Hotel Makkah',               city: 'MAKKAH', stars: 4, distanceToHaramMeters: 600, address: 'Al Haram District, Makkah',          amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness'] },
+  { name: 'Al Safwah Royale Orchid Hotel',           city: 'MAKKAH', stars: 4, distanceToHaramMeters: 500, address: 'Ajyad Street, Makkah',               amenities: ['Shuttle','Restaurant','Prayer rooms','Fitness'] },
+  { name: 'Elaf Ajyad Hotel',                        city: 'MAKKAH', stars: 4, distanceToHaramMeters: 500, address: 'Ajyad Street, Makkah 24231',         amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Elaf Al Mashaer Hotel',                   city: 'MAKKAH', stars: 4, distanceToHaramMeters: 800, address: 'Jarwal District, Makkah',            amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Al Shohada Hotel Makkah',                 city: 'MAKKAH', stars: 4, distanceToHaramMeters: 600, address: 'Al Shohada Street, Makkah',          amenities: ['Shuttle','Restaurant','Prayer rooms','Fitness'] },
+  { name: 'Dorar Dar Diyafah Hotel',                 city: 'MAKKAH', stars: 4, distanceToHaramMeters: 700, address: 'Ajyad Street, Makkah',               amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Dar Al Tawhid Ajyad Hotel',               city: 'MAKKAH', stars: 3, distanceToHaramMeters: 400, address: 'Ajyad Street, Makkah',               amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Al Khozama Makkah Hotel',                 city: 'MAKKAH', stars: 3, distanceToHaramMeters: 900, address: 'Ajyad Street, Makkah',               amenities: ['Restaurant','Prayer rooms'] },
+
+  // ── MADINAH ─────────────────────────────────────────────────────────────
+  { name: 'The Oberoi Madinah',                      city: 'MADINAH', stars: 5, distanceToHaramMeters: 300, address: 'Al Jamia Al Islamiya Street, Madinah 42311', amenities: ['Butler service','Fine dining','Prayer rooms','Spa','Concierge','Fitness'] },
+  { name: 'Pullman Zamzam Madinah',                  city: 'MADINAH', stars: 5, distanceToHaramMeters: 200, address: 'King Fahd Street, Madinah 42311',   amenities: ['Nabawi view','Shuttle','Restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Anwar Al Madinah Mövenpick Hotel',        city: 'MADINAH', stars: 5, distanceToHaramMeters: 300, address: 'King Fahd Road, Madinah',            amenities: ['Shuttle','Multiple restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Crowne Plaza Madinah',                    city: 'MADINAH', stars: 5, distanceToHaramMeters: 500, address: 'King Fahd Road, Madinah',            amenities: ['Shuttle','Restaurants','Prayer rooms','Business centre','Fitness'] },
+  { name: 'InterContinental Dar Al Iman Madinah',    city: 'MADINAH', stars: 5, distanceToHaramMeters: 400, address: 'King Fahd Road, Madinah',            amenities: ['Shuttle','Fine dining','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Hilton Madinah',                          city: 'MADINAH', stars: 5, distanceToHaramMeters: 400, address: 'King Fahd Street, Madinah',          amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Pool','Concierge'] },
+  { name: 'Rua Al Madinah Hotel',                    city: 'MADINAH', stars: 5, distanceToHaramMeters: 600, address: 'Abi Bakr Al Siddiq Road, Madinah',  amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Dar Al Taqwa Hotel',                      city: 'MADINAH', stars: 4, distanceToHaramMeters: 200, address: 'Al Sitteen Street, Madinah',         amenities: ['Shuttle','Nabawi view','Restaurant','Prayer rooms'] },
+  { name: 'Al Eiman Royal Hotel',                    city: 'MADINAH', stars: 4, distanceToHaramMeters: 300, address: 'Al Haram District, Madinah',         amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Frontel Al Harithia Hotel',               city: 'MADINAH', stars: 4, distanceToHaramMeters: 600, address: 'Al Harithia District, Madinah',      amenities: ['Shuttle','Restaurant','Prayer rooms','Fitness'] },
+  { name: 'Sheraton Al Noor Madinah Hotel',          city: 'MADINAH', stars: 4, distanceToHaramMeters: 500, address: 'Syed Al Shuhada Street, Madinah',    amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Concierge'] },
+  { name: 'Dallah Taibah Hotel',                     city: 'MADINAH', stars: 4, distanceToHaramMeters: 500, address: 'King Fahd Road, Madinah',            amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness'] },
+  { name: 'Grand Plaza Hotel Madinah',               city: 'MADINAH', stars: 4, distanceToHaramMeters: 600, address: 'Madinah 42311, Saudi Arabia',        amenities: ['Shuttle','Restaurant','Prayer rooms','Fitness'] },
+  { name: 'Novotel Madinah',                         city: 'MADINAH', stars: 4, distanceToHaramMeters: 700, address: 'Al Manakhah District, Madinah',      amenities: ['Shuttle','Restaurants','Prayer rooms','Fitness','Business centre'] },
+  { name: 'Centro Shaheen Madinah by Rotana',        city: 'MADINAH', stars: 4, distanceToHaramMeters: 700, address: 'Shaheen Street, Madinah',            amenities: ['Shuttle','Restaurant','Prayer rooms','Fitness'] },
+  { name: 'Al Nakheel Hotel Madinah',                city: 'MADINAH', stars: 4, distanceToHaramMeters: 800, address: 'Madinah 42311, Saudi Arabia',        amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Safia Hotel Madinah',                     city: 'MADINAH', stars: 4, distanceToHaramMeters: 800, address: 'Madinah 42311, Saudi Arabia',        amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Madinah Concorde Hotel',                  city: 'MADINAH', stars: 3, distanceToHaramMeters: 800, address: 'Madinah 42311, Saudi Arabia',        amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Al Rawda Royal Inn',                      city: 'MADINAH', stars: 3, distanceToHaramMeters: 700, address: 'Al Rawda District, Madinah',         amenities: ['Shuttle','Restaurant','Prayer rooms'] },
+  { name: 'Braira Hotel Madinah',                    city: 'MADINAH', stars: 4, distanceToHaramMeters: 1000, address: 'Madinah 42311, Saudi Arabia',       amenities: ['Shuttle','Restaurant','Prayer rooms','Fitness'] },
+];
+
+const seedHotels = async (req, res, next) => {
+  try {
+    const { tenantId } = req.body;
+    if (!tenantId) return res.status(400).json({ error: 'tenantId is required' });
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true, name: true } });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    // Skip hotels that already exist for this tenant
+    const existing = await prisma.hotel.findMany({ where: { tenantId }, select: { name: true } });
+    const existingNames = new Set(existing.map((h) => h.name));
+    const toCreate = HOTEL_SEED_DATA.filter((h) => !existingNames.has(h.name));
+
+    if (toCreate.length === 0) {
+      return res.json({ message: 'All seed hotels already exist', created: 0, skipped: HOTEL_SEED_DATA.length, total: HOTEL_SEED_DATA.length });
+    }
+
+    await prisma.hotel.createMany({ data: toCreate.map((h) => ({ ...h, tenantId })) });
+
+    const makkahCount  = toCreate.filter((h) => h.city === 'MAKKAH').length;
+    const madinahCount = toCreate.filter((h) => h.city === 'MADINAH').length;
+
+    res.json({
+      message: `Seeded ${toCreate.length} hotels for "${tenant.name}" (${makkahCount} Makkah · ${madinahCount} Madinah)`,
+      created: toCreate.length,
+      skipped: existingNames.size,
+      total: HOTEL_SEED_DATA.length,
+      breakdown: { MAKKAH: makkahCount, MADINAH: madinahCount },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   listTenants, getTenant, updateTenant,
   suspendTenant, activateTenant, deleteTenant,
@@ -437,4 +524,6 @@ module.exports = {
   listPlans, updatePlan, tenantUsage,
   // Approval workflow
   listApplications, approveApplication, rejectApplication,
+  // Hotel seed
+  seedHotels,
 };

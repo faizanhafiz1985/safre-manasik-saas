@@ -31,4 +31,7 @@ router.post('/applications/:id/reject', ctrl.rejectApplication);
 const diagnosticsCtrl = require('../controllers/diagnosticsController');
 router.get('/diagnostics', diagnosticsCtrl.diagnostics);
 
+// Hotel seed — populates Makkah & Madinah hotels for a tenant in one click
+router.post('/seed-hotels', ctrl.seedHotels);
+
 module.exports = router;
