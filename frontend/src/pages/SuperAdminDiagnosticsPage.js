@@ -2,9 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   Box, Paper, Typography, Stack, Button, Chip, Alert, Table, TableHead,
   TableBody, TableRow, TableCell, Card, CardContent, Grid, Divider,
-  MenuItem, TextField, CircularProgress,
 } from '@mui/material';
-import { Refresh, CheckCircle, Warning, Error as ErrorIcon, Hotel } from '@mui/icons-material';
+import { Refresh, CheckCircle, Warning, Error as ErrorIcon } from '@mui/icons-material';
 import api from '../services/api';
 
 /*
@@ -23,38 +22,15 @@ export default function SuperAdminDiagnosticsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Hotel seeding
-  const [tenants, setTenants] = useState([]);
-  const [selectedTenant, setSelectedTenant] = useState('');
-  const [seeding, setSeeding] = useState(false);
-  const [seedResult, setSeedResult] = useState(null);
-
   const load = async () => {
     setLoading(true); setError('');
     try {
-      const [diagRes, tenantsRes] = await Promise.all([
-        api.get('/super-admin/diagnostics'),
-        api.get('/super-admin/tenants?limit=100'),
-      ]);
-      setData(diagRes.data);
-      setTenants(tenantsRes.data.data || []);
+      const res = await api.get('/super-admin/diagnostics');
+      setData(res.data);
     } catch (err) {
       setError(err.response?.data?.error || err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const seedHotels = async () => {
-    if (!selectedTenant) return;
-    setSeeding(true); setSeedResult(null);
-    try {
-      const res = await api.post('/super-admin/seed-hotels', { tenantId: selectedTenant });
-      setSeedResult({ ok: true, ...res.data });
-    } catch (err) {
-      setSeedResult({ ok: false, message: err.response?.data?.error || 'Seed failed' });
-    } finally {
-      setSeeding(false);
     }
   };
 
@@ -187,58 +163,6 @@ export default function SuperAdminDiagnosticsPage() {
         </>
       )}
 
-      {/* ── Hotel Seed Tool ─────────────────────────────────────────────── */}
-      <Paper sx={{ mt: 3, overflow: 'hidden' }}>
-        <Box sx={{ p: 2, bgcolor: '#F3F8F5', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Hotel sx={{ color: '#1B4B35' }} />
-          <Box>
-            <Typography variant="h6" fontWeight={700}>Seed Hotels</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Populate a tenant with 44 curated 3★–5★ hotels in Makkah and Madinah (sourced from Booking.com listings).
-              Existing hotels are never overwritten.
-            </Typography>
-          </Box>
-        </Box>
-        <Box sx={{ p: 3 }}>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <TextField
-              select label="Select Tenant" value={selectedTenant}
-              onChange={(e) => { setSelectedTenant(e.target.value); setSeedResult(null); }}
-              sx={{ minWidth: 280 }}
-              size="small"
-            >
-              <MenuItem value="">— choose a tenant —</MenuItem>
-              {tenants.map((t) => (
-                <MenuItem key={t.id} value={t.id}>{t.name} ({t.slug})</MenuItem>
-              ))}
-            </TextField>
-            <Button
-              variant="contained"
-              startIcon={seeding ? <CircularProgress size={16} color="inherit" /> : <Hotel />}
-              disabled={!selectedTenant || seeding}
-              onClick={seedHotels}
-              sx={{ bgcolor: '#1B4B35', '&:hover': { bgcolor: '#143d28' } }}
-            >
-              {seeding ? 'Seeding…' : 'Seed Makkah & Madinah Hotels'}
-            </Button>
-          </Stack>
-
-          {seedResult && (
-            <Alert
-              severity={seedResult.ok ? 'success' : 'error'}
-              sx={{ mt: 2 }}
-            >
-              <Typography variant="body2" fontWeight={600}>{seedResult.message}</Typography>
-              {seedResult.ok && (
-                <Typography variant="caption">
-                  Created: {seedResult.created} · Skipped (already exist): {seedResult.skipped} · Total in seed: {seedResult.total}
-                  {seedResult.breakdown && ` (Makkah: ${seedResult.breakdown.MAKKAH}, Madinah: ${seedResult.breakdown.MADINAH})`}
-                </Typography>
-              )}
-            </Alert>
-          )}
-        </Box>
-      </Paper>
     </Box>
   );
 }

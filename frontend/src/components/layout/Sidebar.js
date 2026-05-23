@@ -14,6 +14,7 @@ const navItems = [
   { label: 'Platform Admin', icon: <SupervisorAccount />, path: '/super-admin',        roles: ['SUPER_ADMIN'], section: 'platform' },
   { label: 'Applications',   icon: <EventNote />,          path: '/super-admin/applications', roles: ['SUPER_ADMIN'], section: 'platform' },
   { label: 'Plans & Pricing', icon: <BarChart />,         path: '/super-admin/plans',  roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Seed Hotels',    icon: <Hotel />,               path: '/super-admin/hotels',      roles: ['SUPER_ADMIN'], section: 'platform' },
   { label: 'Diagnostics',    icon: <Settings />,           path: '/super-admin/diagnostics', roles: ['SUPER_ADMIN'], section: 'platform' },
 
   // Tenant operational

@@ -27,6 +27,7 @@ import SuperAdminDashboardPage from './pages/SuperAdminDashboardPage';
 import SuperAdminPlansPage from './pages/SuperAdminPlansPage';
 import SuperAdminApplicationsPage from './pages/SuperAdminApplicationsPage';
 import SuperAdminDiagnosticsPage from './pages/SuperAdminDiagnosticsPage';
+import SuperAdminHotelsPage from './pages/SuperAdminHotelsPage';
 import TenantSettingsPage from './pages/TenantSettingsPage';
 import PaymentStubPage from './pages/PaymentStubPage';
 import PayPalSuccessPage from './pages/PayPalSuccessPage';
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="super-admin/plans" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminPlansPage /></PrivateRoute>} />
           <Route path="super-admin/applications" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminApplicationsPage /></PrivateRoute>} />
           <Route path="super-admin/diagnostics" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminDiagnosticsPage /></PrivateRoute>} />
+          <Route path="super-admin/hotels" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminHotelsPage /></PrivateRoute>} />
           <Route path="reports/daily-schedule" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><DailySchedulePage /></PrivateRoute>} />
           <Route path="reports/transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><TransportReportPage /></PrivateRoute>} />
           <Route path="tenant-settings" element={<PrivateRoute roles={['ADMIN']}><TenantSettingsPage /></PrivateRoute>} />
