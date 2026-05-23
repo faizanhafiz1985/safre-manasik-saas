@@ -28,6 +28,7 @@ const navItems = [
   { label: 'Catering',       icon: <Restaurant />,         path: '/catering',           roles: ['ADMIN','AGENT'] },
   { label: 'Hotels',         icon: <Hotel />,              path: '/hotels',             roles: ['ADMIN','AGENT'] },
   { label: 'Payments',       icon: <Payment />,            path: '/payments',           roles: ['ADMIN','AGENT'] },
+  { label: 'Customers',      icon: <People />,             path: '/customers',          roles: ['ADMIN', 'AGENT'] },
   { label: 'Users',          icon: <People />,             path: '/users',              roles: ['ADMIN'] },
 
   // Admin

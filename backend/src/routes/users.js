@@ -9,8 +9,9 @@ router.get('/agents', ctrl.getAgents);
 router.get('/customers', authorize('ADMIN', 'AGENT'), ctrl.getCustomers);
 router.get('/', authorize('ADMIN'), ctrl.getAll);
 router.get('/:id', authorize('ADMIN'), ctrl.getOne);
-router.post('/', authorize('ADMIN'), checkQuota('users'), ctrl.create);
-router.put('/:id', authorize('ADMIN'), ctrl.update);
+// AGENT may create CUSTOMER-role users only (enforced in controller)
+router.post('/', authorize('ADMIN', 'AGENT'), checkQuota('users'), ctrl.create);
+router.put('/:id', authorize('ADMIN', 'AGENT'), ctrl.update);
 router.delete('/:id', authorize('ADMIN'), ctrl.remove);
 
 module.exports = router;

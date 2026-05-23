@@ -49,6 +49,11 @@ const create = async (req, res, next) => {
     const { name, email, password, role, phone, companyName, address, customerType, crNumber, vatNumber } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Name is required' });
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email is required' });
+
+    // AGENTs may only create CUSTOMER-role users (not admins or other agents)
+    let allowedRole = ['ADMIN', 'AGENT', 'CUSTOMER'].includes(role) ? role : 'CUSTOMER';
+    if (req.user?.role === 'AGENT') allowedRole = 'CUSTOMER';
+
     // Check globally for email uniqueness (email is unique across all tenants)
     let existing;
     await new Promise((resolve, reject) => {
@@ -58,7 +63,6 @@ const create = async (req, res, next) => {
     });
     if (existing) return res.status(409).json({ error: 'Email already registered' });
     const hash = await bcrypt.hash(password || 'Temp@1234', 12);
-    const allowedRole = ['ADMIN', 'AGENT', 'CUSTOMER'].includes(role) ? role : 'CUSTOMER';
     const user = await prisma.user.create({
       data: { name, email, password: hash, role: allowedRole, phone, companyName, address, customerType, crNumber, vatNumber },
       select: { id: true, name: true, email: true, role: true, phone: true, companyName: true, customerType: true, crNumber: true, vatNumber: true, isActive: true, createdAt: true },
@@ -72,7 +76,13 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { name, phone, companyName, address, isActive, role, customerType, crNumber, vatNumber } = req.body;
-    const allowedRole = role && ['ADMIN', 'AGENT', 'CUSTOMER'].includes(role) ? role : undefined;
+    let allowedRole = role && ['ADMIN', 'AGENT', 'CUSTOMER'].includes(role) ? role : undefined;
+    // AGENTs can only edit CUSTOMER records — verify the target is a customer first
+    if (req.user?.role === 'AGENT') {
+      const target = await prisma.user.findFirst({ where: { id: req.params.id }, select: { role: true } });
+      if (!target || target.role !== 'CUSTOMER') return res.status(403).json({ error: 'Agents may only edit customer records' });
+      allowedRole = undefined; // agents cannot change role
+    }
     const result = await prisma.user.updateMany({
       where: { id: req.params.id },
       data: {
