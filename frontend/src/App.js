@@ -33,6 +33,8 @@ import PaymentStubPage from './pages/PaymentStubPage';
 import PayPalSuccessPage from './pages/PayPalSuccessPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -57,6 +59,8 @@ export default function App() {
         <Route path="/signup" element={<TenantSignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsOfServicePage />} />
         <Route path="/payment/stub" element={<PrivateRoute><PaymentStubPage /></PrivateRoute>} />
         <Route path="/payment/paypal/success" element={<PrivateRoute><PayPalSuccessPage /></PrivateRoute>} />
         <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>

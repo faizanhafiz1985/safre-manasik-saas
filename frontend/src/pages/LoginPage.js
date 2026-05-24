@@ -125,6 +125,10 @@ export default function LoginPage() {
         <Typography variant="caption" textAlign="center" display="block" sx={{ mt: 2, color: 'rgba(255,255,255,0.5)' }}>
           By signing up you agree to a free trial of the Starter plan.
         </Typography>
+        <Box sx={{ textAlign: 'center', mt: 1.5, display: 'flex', justifyContent: 'center', gap: 2 }}>
+          <Link to="/privacy" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', textDecoration: 'none' }}>Privacy Policy</Link>
+          <Link to="/terms" style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', textDecoration: 'none' }}>Terms of Service</Link>
+        </Box>
       </Box>
     </Box>
   );
