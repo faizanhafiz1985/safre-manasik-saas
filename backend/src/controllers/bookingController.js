@@ -105,6 +105,9 @@ const create = async (req, res, next) => {
     const dateTo = new Date(travelDateTo);
     if (isNaN(dateFrom.getTime())) return res.status(400).json({ error: 'Invalid departure date' });
     if (isNaN(dateTo.getTime())) return res.status(400).json({ error: 'Invalid return date' });
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    if (dateFrom < today) return res.status(400).json({ error: 'Departure date cannot be in the past' });
     if (dateTo < dateFrom) return res.status(400).json({ error: 'Return date must be on or after departure date' });
 
     const pax = Number(totalPax);
