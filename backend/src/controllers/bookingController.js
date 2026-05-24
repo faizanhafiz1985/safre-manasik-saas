@@ -1,6 +1,9 @@
 const prisma = require('../config/database');
 const { getTenantId } = require('../config/tenantContext');
 
+// Refs must be globally unique (bookingRef has a DB-level unique index).
+// Count ALL bookings/invoices across every tenant so the sequence never
+// collides between tenants. Raw SQL bypasses the per-tenant middleware.
 const generateBookingRef = async () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -8,8 +11,13 @@ const generateBookingRef = async () => {
   const prefix = `SAFM${year}${month}`;
   const startOfMonth = new Date(year, now.getMonth(), 1);
   const endOfMonth   = new Date(year, now.getMonth() + 1, 0, 23, 59, 59, 999);
-  const count = await prisma.booking.count({ where: { createdAt: { gte: startOfMonth, lte: endOfMonth } } });
-  return `${prefix}${String(count + 1).padStart(4, '0')}`;
+  // Use raw SQL to count globally (not scoped to current tenant)
+  const rows = await prisma.$queryRaw`
+    SELECT COUNT(*)::int AS cnt FROM bookings
+    WHERE "createdAt" >= ${startOfMonth} AND "createdAt" <= ${endOfMonth}
+  `;
+  const count = rows[0]?.cnt ?? 0;
+  return `${prefix}${String(Number(count) + 1).padStart(4, '0')}`;
 };
 
 const generateInvoiceNo = async () => {
@@ -19,8 +27,13 @@ const generateInvoiceNo = async () => {
   const prefix = `SAFMINV${year}${month}`;
   const startOfMonth = new Date(year, now.getMonth(), 1);
   const endOfMonth   = new Date(year, now.getMonth() + 1, 0, 23, 59, 59, 999);
-  const count = await prisma.invoice.count({ where: { createdAt: { gte: startOfMonth, lte: endOfMonth } } });
-  return `${prefix}${String(count + 1).padStart(4, '0')}`;
+  // Use raw SQL to count globally (not scoped to current tenant)
+  const rows = await prisma.$queryRaw`
+    SELECT COUNT(*)::int AS cnt FROM invoices
+    WHERE "createdAt" >= ${startOfMonth} AND "createdAt" <= ${endOfMonth}
+  `;
+  const count = rows[0]?.cnt ?? 0;
+  return `${prefix}${String(Number(count) + 1).padStart(4, '0')}`;
 };
 
 const bookingInclude = {
