@@ -35,6 +35,14 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
+import CrmDashboardPage from './pages/crm/CrmDashboardPage';
+import CrmLeadsPage from './pages/crm/CrmLeadsPage';
+import CrmPipelinePage from './pages/crm/CrmPipelinePage';
+import CrmTasksPage from './pages/crm/CrmTasksPage';
+import CrmInboxPage from './pages/crm/CrmInboxPage';
+import CrmReportsPage from './pages/crm/CrmReportsPage';
+import CrmSettingsPage from './pages/crm/CrmSettingsPage';
+import SuperAdminCrmPage from './pages/SuperAdminCrmPage';
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -71,6 +79,7 @@ export default function App() {
           <Route path="super-admin/applications" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminApplicationsPage /></PrivateRoute>} />
           <Route path="super-admin/diagnostics" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminDiagnosticsPage /></PrivateRoute>} />
           <Route path="super-admin/hotels" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminHotelsPage /></PrivateRoute>} />
+          <Route path="super-admin/crm" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminCrmPage /></PrivateRoute>} />
           <Route path="reports/daily-schedule" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><DailySchedulePage /></PrivateRoute>} />
           <Route path="reports/transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><TransportReportPage /></PrivateRoute>} />
           <Route path="tenant-settings" element={<PrivateRoute roles={['ADMIN']}><TenantSettingsPage /></PrivateRoute>} />
@@ -86,6 +95,14 @@ export default function App() {
           <Route path="users" element={<PrivateRoute roles={['ADMIN']}><UsersPage /></PrivateRoute>} />
           <Route path="config" element={<PrivateRoute roles={['ADMIN']}><AdminConfigPage /></PrivateRoute>} />
           <Route path="profile" element={<ProfilePage />} />
+          {/* CRM Module */}
+          <Route path="crm" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CrmDashboardPage /></PrivateRoute>} />
+          <Route path="crm/leads" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CrmLeadsPage /></PrivateRoute>} />
+          <Route path="crm/pipeline" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CrmPipelinePage /></PrivateRoute>} />
+          <Route path="crm/tasks" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CrmTasksPage /></PrivateRoute>} />
+          <Route path="crm/inbox" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CrmInboxPage /></PrivateRoute>} />
+          <Route path="crm/reports" element={<PrivateRoute roles={['ADMIN']}><CrmReportsPage /></PrivateRoute>} />
+          <Route path="crm/settings" element={<PrivateRoute roles={['ADMIN']}><CrmSettingsPage /></PrivateRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

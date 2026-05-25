@@ -20,6 +20,20 @@ const TENANT_MODELS = new Set([
   'Payment',
   'Invoice',
   'SystemConfig',
+  // ── CRM module ──────────────────────────────────────────────────────────
+  'CrmConfig',
+  'CrmLead',
+  'CrmLeadActivity',
+  'CrmPipeline',
+  'CrmPipelineStage',
+  'CrmOpportunity',
+  'CrmOpportunityActivity',
+  'CrmTask',
+  'CrmConversation',
+  'CrmMessage',
+  'CrmIntegration',
+  'CrmAutomationRule',
+  'CrmNotification',
 ]);
 
 // Models that have a tenantId but where filtering by it should be optional.

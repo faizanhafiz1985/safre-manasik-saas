@@ -34,4 +34,12 @@ router.get('/diagnostics', diagnosticsCtrl.diagnostics);
 // Hotel seed — populates Makkah & Madinah hotels for a tenant in one click
 router.post('/seed-hotels', ctrl.seedHotels);
 
+// ── CRM Management ────────────────────────────────────────────────────────────
+router.get('/crm/tenants',            ctrl.listCrmTenants);
+router.get('/crm/stats',              ctrl.crmPlatformStats);
+router.get('/crm/tenants/:id/config', ctrl.getCrmConfig);
+router.put('/crm/tenants/:id/config', ctrl.updateCrmConfig);
+router.post('/crm/tenants/:id/enable', (req, res, next) => { req.body.enabled = true;  ctrl.setCrmEnabled(req, res, next); });
+router.post('/crm/tenants/:id/disable', (req, res, next) => { req.body.enabled = false; ctrl.setCrmEnabled(req, res, next); });
+
 module.exports = router;

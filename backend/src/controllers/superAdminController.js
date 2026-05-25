@@ -517,6 +517,103 @@ const seedHotels = async (req, res, next) => {
   }
 };
 
+// ─── CRM Management (SuperAdmin) ─────────────────────────────────────────────
+
+const listCrmTenants = async (req, res, next) => {
+  try {
+    const tenants = await prisma.tenant.findMany({
+      select: {
+        id: true, name: true, slug: true, plan: true, status: true,
+        crmConfig: { select: { id: true, enabled: true, whatsappEnabled: true, facebookEnabled: true, instagramEnabled: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const result = await Promise.all(tenants.map(async (t) => {
+      const [leads, opps, tasks] = await Promise.all([
+        prisma.crmLead.count({ where: { tenantId: t.id } }),
+        prisma.crmOpportunity.count({ where: { tenantId: t.id } }),
+        prisma.crmTask.count({ where: { tenantId: t.id } }),
+      ]);
+      return { ...t, crmUsage: { leads, opportunities: opps, tasks } };
+    }));
+
+    res.json(result);
+  } catch (err) { next(err); }
+};
+
+const setCrmEnabled = async (req, res, next) => {
+  try {
+    const { enabled } = req.body;
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id } });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    // Upsert CrmConfig
+    const existing = await prisma.crmConfig.findUnique({ where: { tenantId: req.params.id } });
+    if (existing) {
+      await prisma.crmConfig.updateMany({ where: { tenantId: req.params.id }, data: { enabled: Boolean(enabled) } });
+    } else {
+      await prisma.crmConfig.create({ data: { tenantId: req.params.id, enabled: Boolean(enabled) } });
+    }
+
+    res.json({ tenantId: req.params.id, crmEnabled: Boolean(enabled) });
+  } catch (err) { next(err); }
+};
+
+const getCrmConfig = async (req, res, next) => {
+  try {
+    const config = await prisma.crmConfig.findUnique({ where: { tenantId: req.params.id } });
+    res.json(config || { tenantId: req.params.id, enabled: false });
+  } catch (err) { next(err); }
+};
+
+const updateCrmConfig = async (req, res, next) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id } });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    const { enabled, maxLeads, maxPipelines, whatsappEnabled, facebookEnabled, instagramEnabled, autoAssignEnabled } = req.body;
+
+    const existing = await prisma.crmConfig.findUnique({ where: { tenantId: req.params.id } });
+    let config;
+    const data = {
+      ...(enabled !== undefined && { enabled }),
+      ...(maxLeads !== undefined && { maxLeads: maxLeads ? Number(maxLeads) : null }),
+      ...(maxPipelines !== undefined && { maxPipelines: Number(maxPipelines) }),
+      ...(whatsappEnabled !== undefined && { whatsappEnabled }),
+      ...(facebookEnabled !== undefined && { facebookEnabled }),
+      ...(instagramEnabled !== undefined && { instagramEnabled }),
+      ...(autoAssignEnabled !== undefined && { autoAssignEnabled }),
+    };
+
+    if (existing) {
+      await prisma.crmConfig.updateMany({ where: { tenantId: req.params.id }, data });
+      config = await prisma.crmConfig.findUnique({ where: { tenantId: req.params.id } });
+    } else {
+      config = await prisma.crmConfig.create({ data: { tenantId: req.params.id, ...data } });
+    }
+    res.json(config);
+  } catch (err) { next(err); }
+};
+
+const crmPlatformStats = async (req, res, next) => {
+  try {
+    const [totalLeads, totalOpps, totalTasks, totalConversations, integrations] = await Promise.all([
+      prisma.crmLead.count(),
+      prisma.crmOpportunity.count(),
+      prisma.crmTask.count(),
+      prisma.crmConversation.count(),
+      prisma.crmIntegration.groupBy({ by: ['type', 'isEnabled'], _count: true }),
+    ]);
+    const webhookLogs = await prisma.crmWebhookLog.groupBy({
+      by: ['source', 'processed'],
+      _count: true,
+      orderBy: { _count: { source: 'desc' } },
+    });
+    res.json({ totalLeads, totalOpps, totalTasks, totalConversations, integrations, webhookLogs });
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   listTenants, getTenant, updateTenant,
   suspendTenant, activateTenant, deleteTenant,
@@ -526,4 +623,6 @@ module.exports = {
   listApplications, approveApplication, rejectApplication,
   // Hotel seed
   seedHotels,
+  // CRM management
+  listCrmTenants, setCrmEnabled, getCrmConfig, updateCrmConfig, crmPlatformStats,
 };

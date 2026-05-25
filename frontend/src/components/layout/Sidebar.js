@@ -4,37 +4,48 @@ import { Box, List, ListItem, ListItemIcon, ListItemText, Typography, Divider } 
 import {
   Dashboard, CardTravel, BookOnline, DirectionsBus, Restaurant,
   Hotel, ConfirmationNumber, Payment, People, Settings, BarChart, EventNote,
-  SupervisorAccount, Business,
+  SupervisorAccount, Business, Campaign, Leaderboard, ViewKanban,
+  AssignmentTurnedIn, Inbox, Tune, AdminPanelSettings,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import BrandLogo from '../BrandLogo';
 
 const navItems = [
   // Super admin only
-  { label: 'Platform Admin', icon: <SupervisorAccount />, path: '/super-admin',        roles: ['SUPER_ADMIN'], section: 'platform' },
-  { label: 'Applications',   icon: <EventNote />,          path: '/super-admin/applications', roles: ['SUPER_ADMIN'], section: 'platform' },
-  { label: 'Plans & Pricing', icon: <BarChart />,         path: '/super-admin/plans',  roles: ['SUPER_ADMIN'], section: 'platform' },
-  { label: 'Seed Hotels',    icon: <Hotel />,               path: '/super-admin/hotels',      roles: ['SUPER_ADMIN'], section: 'platform' },
-  { label: 'Diagnostics',    icon: <Settings />,           path: '/super-admin/diagnostics', roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Platform Admin',  icon: <SupervisorAccount />, path: '/super-admin',               roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Applications',    icon: <EventNote />,          path: '/super-admin/applications',  roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Plans & Pricing', icon: <BarChart />,           path: '/super-admin/plans',         roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Seed Hotels',     icon: <Hotel />,              path: '/super-admin/hotels',        roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Diagnostics',     icon: <Settings />,           path: '/super-admin/diagnostics',   roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'CRM Management',  icon: <AdminPanelSettings />, path: '/super-admin/crm',           roles: ['SUPER_ADMIN'], section: 'platform' },
 
   // Tenant operational
-  { label: 'Dashboard',      icon: <Dashboard />,         path: '/dashboard',          roles: ['ADMIN','AGENT','CUSTOMER'] },
-  { label: 'Daily Schedule', icon: <EventNote />,         path: '/reports/daily-schedule', roles: ['ADMIN','AGENT'] },
-  { label: 'Transport Report', icon: <BarChart />,        path: '/reports/transport',  roles: ['ADMIN','AGENT'] },
+  { label: 'Dashboard',       icon: <Dashboard />,          path: '/dashboard',                 roles: ['ADMIN','AGENT','CUSTOMER'] },
+  { label: 'Daily Schedule',  icon: <EventNote />,          path: '/reports/daily-schedule',    roles: ['ADMIN','AGENT'] },
+  { label: 'Transport Report',icon: <BarChart />,           path: '/reports/transport',         roles: ['ADMIN','AGENT'] },
 
-  { label: 'Packages',       icon: <CardTravel />,         path: '/packages',           roles: ['ADMIN','AGENT','CUSTOMER'] },
-  { label: 'Bookings',       icon: <BookOnline />,         path: '/bookings',           roles: ['ADMIN','AGENT','CUSTOMER'] },
-  { label: 'Vouchers',       icon: <ConfirmationNumber />, path: '/vouchers',           roles: ['ADMIN','AGENT','CUSTOMER'] },
-  { label: 'Transport',      icon: <DirectionsBus />,      path: '/transport',          roles: ['ADMIN','AGENT'] },
-  { label: 'Catering',       icon: <Restaurant />,         path: '/catering',           roles: ['ADMIN','AGENT'] },
-  { label: 'Hotels',         icon: <Hotel />,              path: '/hotels',             roles: ['ADMIN','AGENT'] },
-  { label: 'Payments',       icon: <Payment />,            path: '/payments',           roles: ['ADMIN','AGENT'] },
-  { label: 'Customers',      icon: <People />,             path: '/customers',          roles: ['ADMIN', 'AGENT'] },
-  { label: 'Users',          icon: <People />,             path: '/users',              roles: ['ADMIN'] },
+  { label: 'Packages',        icon: <CardTravel />,         path: '/packages',                  roles: ['ADMIN','AGENT','CUSTOMER'] },
+  { label: 'Bookings',        icon: <BookOnline />,         path: '/bookings',                  roles: ['ADMIN','AGENT','CUSTOMER'] },
+  { label: 'Vouchers',        icon: <ConfirmationNumber />, path: '/vouchers',                  roles: ['ADMIN','AGENT','CUSTOMER'] },
+  { label: 'Transport',       icon: <DirectionsBus />,      path: '/transport',                 roles: ['ADMIN','AGENT'] },
+  { label: 'Catering',        icon: <Restaurant />,         path: '/catering',                  roles: ['ADMIN','AGENT'] },
+  { label: 'Hotels',          icon: <Hotel />,              path: '/hotels',                    roles: ['ADMIN','AGENT'] },
+  { label: 'Payments',        icon: <Payment />,            path: '/payments',                  roles: ['ADMIN','AGENT'] },
+  { label: 'Customers',       icon: <People />,             path: '/customers',                 roles: ['ADMIN', 'AGENT'] },
+  { label: 'Users',           icon: <People />,             path: '/users',                     roles: ['ADMIN'] },
+
+  // CRM Module
+  { label: 'CRM Overview',    icon: <Campaign />,           path: '/crm',                       roles: ['ADMIN','AGENT'], section: 'crm' },
+  { label: 'Leads',           icon: <Leaderboard />,        path: '/crm/leads',                 roles: ['ADMIN','AGENT'], section: 'crm' },
+  { label: 'Pipeline',        icon: <ViewKanban />,         path: '/crm/pipeline',              roles: ['ADMIN','AGENT'], section: 'crm' },
+  { label: 'Tasks',           icon: <AssignmentTurnedIn />, path: '/crm/tasks',                 roles: ['ADMIN','AGENT'], section: 'crm' },
+  { label: 'Inbox',           icon: <Inbox />,              path: '/crm/inbox',                 roles: ['ADMIN','AGENT'], section: 'crm' },
+  { label: 'CRM Reports',     icon: <BarChart />,           path: '/crm/reports',               roles: ['ADMIN'], section: 'crm' },
+  { label: 'Integrations',    icon: <Tune />,               path: '/crm/settings',              roles: ['ADMIN'], section: 'crm' },
 
   // Admin
-  { label: 'Tenant Settings',icon: <Business />,           path: '/tenant-settings',    roles: ['ADMIN'] },
-  { label: 'System Config',  icon: <Settings />,           path: '/config',             roles: ['ADMIN'] },
+  { label: 'Tenant Settings', icon: <Business />,           path: '/tenant-settings',           roles: ['ADMIN'] },
+  { label: 'System Config',   icon: <Settings />,           path: '/config',                    roles: ['ADMIN'] },
 ];
 
 const roleLabel = {
@@ -103,30 +114,41 @@ export default function Sidebar({ onClose }) {
       </Box>
 
       <List sx={{ px: 1.5, pt: 1, flexGrow: 1 }}>
-        {filtered.map((item) => {
-          const active = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+        {filtered.map((item, idx) => {
+          const active = location.pathname === item.path || (item.path !== '/crm' && location.pathname.startsWith(item.path + '/'));
+          const prevItem = filtered[idx - 1];
+          const showCrmDivider = item.section === 'crm' && prevItem?.section !== 'crm';
           return (
-            <ListItem
-              key={item.path}
-              button
-              onClick={() => { navigate(item.path); onClose?.(); }}
-              sx={{
-                borderRadius: 2, mb: 0.5,
-                bgcolor: active ? 'rgba(201,162,39,0.18)' : 'transparent',
-                borderLeft: active ? '3px solid #C9A227' : '3px solid transparent',
-                color: active ? '#C9A227' : 'rgba(255,255,255,0.75)',
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' },
-                py: 0.9,
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                {React.cloneElement(item.icon, { fontSize: 'small' })}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.label}
-                primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: active ? 700 : 500 }}
-              />
-            </ListItem>
+            <React.Fragment key={item.path}>
+              {showCrmDivider && (
+                <Box sx={{ px: 1, pt: 1.5, pb: 0.5 }}>
+                  <Divider sx={{ borderColor: 'rgba(255,255,255,0.10)', mb: 1 }} />
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 700, fontSize: '0.62rem', letterSpacing: 1, textTransform: 'uppercase' }}>
+                    CRM
+                  </Typography>
+                </Box>
+              )}
+              <ListItem
+                button
+                onClick={() => { navigate(item.path); onClose?.(); }}
+                sx={{
+                  borderRadius: 2, mb: 0.5,
+                  bgcolor: active ? 'rgba(201,162,39,0.18)' : 'transparent',
+                  borderLeft: active ? '3px solid #C9A227' : '3px solid transparent',
+                  color: active ? '#C9A227' : 'rgba(255,255,255,0.75)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' },
+                  py: 0.9,
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                  {React.cloneElement(item.icon, { fontSize: 'small' })}
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.label}
+                  primaryTypographyProps={{ fontSize: '0.85rem', fontWeight: active ? 700 : 500 }}
+                />
+              </ListItem>
+            </React.Fragment>
           );
         })}
       </List>

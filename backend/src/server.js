@@ -38,6 +38,8 @@ const tenantRoutes = require('./routes/tenant');
 const superAdminRoutes = require('./routes/superAdmin');
 const reportRoutes = require('./routes/reports');
 const paymentGatewayRoutes = require('./routes/paymentGateway');
+const crmRoutes = require('./routes/crm');
+const crmWebhookRoutes = require('./routes/crmWebhooks');
 
 const app = express();
 
@@ -93,6 +95,9 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/crm', crmRoutes);
+// CRM webhooks are public (Meta signature-verified internally)
+app.use('/api/crm/webhooks', crmWebhookRoutes);
 
 app.use(notFound);
 // Sentry error handler must come BEFORE the generic error handler
