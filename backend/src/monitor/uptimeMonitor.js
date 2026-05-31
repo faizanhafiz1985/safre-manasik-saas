@@ -1,34 +1,42 @@
 /**
  * Uptime Monitor — checks app + API endpoints and DNS nameservers every 5 minutes.
  *
- * Sends alerts via:
- *   1. Email        — uses the existing SMTP emailService (Resend/nodemailer)
- *   2. WhatsApp     — CallMeBot (free, no Twilio account needed) OR Twilio WhatsApp
- *   3. SMS          — Twilio SMS
+ * Sends alerts via (configure as many as you want, all are optional):
+ *   1. Email        — existing SMTP/Resend emailService
+ *   2. Telegram     — free bot, instant, most reliable (RECOMMENDED)
+ *   3. WhatsApp     — via Twilio (paid) — CallMeBot removed (Meta blocks it)
+ *   4. SMS          — via Twilio (paid)
  *
- * Env vars (add to Railway):
+ * ── Railway env vars to set ──────────────────────────────────────────────────
  *
- *   UPTIME_CHECK_INTERVAL_MS   How often to check (default: 300000 = 5 min)
- *   UPTIME_ALERT_EMAIL         Comma-separated emails to alert, e.g. admin@safremanasik.com
- *   UPTIME_ALERT_COOLDOWN_MS   Min ms between repeat alerts for same issue (default: 1800000 = 30 min)
+ *   UPTIME_MONITOR_ENABLED     Set to "false" to disable. Default: enabled.
+ *   UPTIME_CHECK_INTERVAL_MS   How often to check. Default: 300000 (5 min).
+ *   UPTIME_ALERT_COOLDOWN_MS   Min ms between repeat down alerts. Default: 1800000 (30 min).
+ *   UPTIME_ALERT_EMAIL         Comma-separated emails, e.g. admin@safremanasik.com
  *
- *   -- WhatsApp via CallMeBot (free) --
- *   CALLMEBOT_PHONE            Your WhatsApp number with country code, e.g. +966501234567
- *   CALLMEBOT_APIKEY           Your CallMeBot API key (get from wa.me/+34644592903 saying "I allow callmebot to send me messages")
+ *   -- Telegram (FREE — takes 2 minutes to set up, RECOMMENDED) --
+ *   TELEGRAM_BOT_TOKEN         Your bot token from @BotFather (e.g. 123456:ABC-DEF...)
+ *   TELEGRAM_CHAT_ID           Your chat ID (get from @userinfobot after messaging your bot)
  *
- *   -- WhatsApp + SMS via Twilio (paid, more reliable) --
+ *   -- Twilio WhatsApp (paid) --
  *   TWILIO_ACCOUNT_SID         Twilio Account SID (ACxxxxxxx)
  *   TWILIO_AUTH_TOKEN          Twilio Auth Token
  *   TWILIO_WHATSAPP_FROM       e.g. whatsapp:+14155238886
  *   TWILIO_WHATSAPP_TO         e.g. whatsapp:+966501234567
+ *
+ *   -- Twilio SMS (paid) --
  *   TWILIO_SMS_FROM            e.g. +12025550100
  *   TWILIO_SMS_TO              e.g. +966501234567
  *
- * Setup CallMeBot (5 minutes, free):
- *   1. Open WhatsApp on your phone
- *   2. Send "I allow callmebot to send me messages" to +34644592903
- *   3. You'll receive your API key in reply
- *   4. Set CALLMEBOT_PHONE and CALLMEBOT_APIKEY in Railway env vars
+ * ── Telegram setup (2 minutes, completely free) ──────────────────────────────
+ *   1. Open Telegram → search "@BotFather" → send /newbot
+ *   2. Choose a name (e.g. "Safre Monitor") and username (e.g. safre_monitor_bot)
+ *   3. BotFather gives you a token like: 7123456789:AAG8xyz...
+ *      → Set as TELEGRAM_BOT_TOKEN in Railway
+ *   4. Search your new bot in Telegram → click Start
+ *   5. Open https://api.telegram.org/bot{YOUR_TOKEN}/getUpdates in browser
+ *      → Find "chat":{"id": XXXXXX} in the response
+ *      → Set that number as TELEGRAM_CHAT_ID in Railway
  */
 
 const https = require('https');
@@ -130,22 +138,37 @@ async function dnsNsCheck(domain, expectedNS) {
   }
 }
 
-// ── WhatsApp via CallMeBot ─────────────────────────────────────────────────────
+// ── Telegram ──────────────────────────────────────────────────────────────────
 
-function sendCallMeBot(message) {
-  const phone = process.env.CALLMEBOT_PHONE;
-  const apikey = process.env.CALLMEBOT_APIKEY;
-  if (!phone || !apikey) return Promise.resolve({ ok: false, reason: 'CallMeBot not configured' });
+function sendTelegram(message) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return Promise.resolve({ ok: false, reason: 'Telegram not configured' });
 
-  const encoded = encodeURIComponent(message);
-  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(phone)}&text=${encoded}&apikey=${encodeURIComponent(apikey)}`;
+  const body = JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' });
 
   return new Promise((resolve) => {
-    https.get(url, (res) => {
-      res.resume();
-      const ok = res.statusCode >= 200 && res.statusCode < 300;
-      resolve({ ok, httpStatus: res.statusCode });
-    }).on('error', (err) => resolve({ ok: false, reason: err.message }));
+    const options = {
+      hostname: 'api.telegram.org',
+      path: `/bot${token}/sendMessage`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve({ ok: parsed.ok === true, raw: data.substring(0, 200) });
+        } catch {
+          resolve({ ok: res.statusCode === 200, httpStatus: res.statusCode });
+        }
+      });
+    });
+    req.on('error', (err) => resolve({ ok: false, reason: err.message }));
+    req.write(body);
+    req.end();
   });
 }
 
@@ -180,14 +203,13 @@ function sendTwilio(to, from, message) {
   });
 }
 
-async function sendWhatsApp(message) {
-  // Try CallMeBot first (free), then Twilio WhatsApp
-  const cmb = await sendCallMeBot(message);
-  if (cmb.ok) {
-    logger.info('[monitor] WhatsApp sent via CallMeBot');
-    return;
-  }
+async function sendTelegramAlert(message) {
+  const result = await sendTelegram(message);
+  if (result.ok) logger.info('[monitor] Telegram alert sent');
+  else logger.warn(`[monitor] Telegram alert failed: ${JSON.stringify(result)}`);
+}
 
+async function sendWhatsApp(message) {
   const waTo = process.env.TWILIO_WHATSAPP_TO;
   const waFrom = process.env.TWILIO_WHATSAPP_FROM;
   if (waTo && waFrom) {
@@ -250,9 +272,10 @@ async function sendDownAlert(check, reason) {
     });
   }
 
-  const shortMsg = `🔴 Safre Manasik DOWN\n${check.label}\nReason: ${reason}\nTime: ${now.toUTCString().substring(0, 25)}`;
-  await sendWhatsApp(shortMsg);
-  await sendSMS(shortMsg);
+  const shortMsg = `🔴 <b>Safre Manasik DOWN</b>\n<b>${check.label}</b>\nReason: <code>${reason}</code>\nTime: ${now.toUTCString().substring(0, 25)}\n\n<b>Fix:</b> Set Dynadot NS → barbara.ns.cloudflare.com + casey.ns.cloudflare.com`;
+  await sendTelegramAlert(shortMsg);
+  await sendWhatsApp(shortMsg.replace(/<[^>]+>/g, ''));
+  await sendSMS(shortMsg.replace(/<[^>]+>/g, ''));
 }
 
 async function sendRecoveryAlert(check, downSince) {
@@ -283,9 +306,10 @@ async function sendRecoveryAlert(check, downSince) {
     });
   }
 
-  const shortMsg = `✅ Safre Manasik RECOVERED\n${check.label}\nDowntime: ${formatDowntime(downtimeMs)}`;
-  await sendWhatsApp(shortMsg);
-  await sendSMS(shortMsg);
+  const shortMsg = `✅ <b>Safre Manasik RECOVERED</b>\n<b>${check.label}</b>\nDowntime: ${formatDowntime(downtimeMs)}`;
+  await sendTelegramAlert(shortMsg);
+  await sendWhatsApp(shortMsg.replace(/<[^>]+>/g, ''));
+  await sendSMS(shortMsg.replace(/<[^>]+>/g, ''));
 }
 
 // ── Run one check cycle ────────────────────────────────────────────────────────
@@ -351,7 +375,7 @@ let monitorInterval = null;
 function startUptimeMonitor() {
   const isEnabled = process.env.UPTIME_MONITOR_ENABLED !== 'false';
   const hasAlertTarget = process.env.UPTIME_ALERT_EMAIL ||
-    process.env.CALLMEBOT_PHONE ||
+    process.env.TELEGRAM_BOT_TOKEN ||
     process.env.TWILIO_ACCOUNT_SID;
 
   if (!isEnabled) {
