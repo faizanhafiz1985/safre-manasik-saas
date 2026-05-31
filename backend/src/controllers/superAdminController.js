@@ -112,8 +112,48 @@ const activateTenant = async (req, res, next) => {
 
 const deleteTenant = async (req, res, next) => {
   try {
-    // CASCADE delete handles all child rows
-    await prisma.tenant.delete({ where: { id: req.params.id } });
+    const tenantId = req.params.id;
+
+    // A handful of join tables reference parent rows (hotels, vehicles, routes,
+    // catering vendors, meal plans) via foreign keys that were created WITHOUT
+    // ON DELETE CASCADE. When the tenant is deleted, Postgres cascades to those
+    // parents but the join rows block the delete with a FK violation
+    // (e.g. package_hotels_hotelId_fkey). We therefore remove the non-cascading
+    // join rows for this tenant first, then let the tenant-level cascade handle
+    // everything else. All wrapped in a single transaction so it's atomic.
+    await prisma.$transaction([
+      // package_hotels → hotels (hotelId has no cascade)
+      prisma.$executeRawUnsafe(
+        `DELETE FROM package_hotels ph
+           USING packages p
+          WHERE ph."packageId" = p.id AND p."tenantId" = $1`,
+        tenantId
+      ),
+      // booking_transports → vehicles/routes (vehicleId/routeId have no cascade)
+      prisma.$executeRawUnsafe(
+        `DELETE FROM booking_transports bt
+           USING bookings b
+          WHERE bt."bookingId" = b.id AND b."tenantId" = $1`,
+        tenantId
+      ),
+      // booking_caterings → meal_plans (mealPlanId has no cascade)
+      prisma.$executeRawUnsafe(
+        `DELETE FROM booking_caterings bc
+           USING bookings b
+          WHERE bc."bookingId" = b.id AND b."tenantId" = $1`,
+        tenantId
+      ),
+      // meal_plans → catering_vendors (vendorId has no cascade)
+      prisma.$executeRawUnsafe(
+        `DELETE FROM meal_plans mp
+           USING catering_vendors cv
+          WHERE mp."vendorId" = cv.id AND cv."tenantId" = $1`,
+        tenantId
+      ),
+      // Now the tenant delete cascades cleanly through the remaining tenantId FKs
+      prisma.tenant.delete({ where: { id: tenantId } }),
+    ]);
+
     res.json({ message: 'Tenant deleted' });
   } catch (err) {
     next(err);

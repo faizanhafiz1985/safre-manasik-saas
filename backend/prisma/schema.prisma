@@ -330,7 +330,7 @@ model PackageHotel {
   city      HotelCity
   nights    Int
   package   Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  hotel     Hotel     @relation(fields: [hotelId], references: [id])
+  hotel     Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@unique([packageId, hotelId])
   @@map("package_hotels")
@@ -443,8 +443,8 @@ model BookingTransport {
   arrivalAt   DateTime?
   notes       String?
   booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
-  route       Route?   @relation(fields: [routeId], references: [id])
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  route       Route?   @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
   @@index([departureAt])
   @@map("booking_transports")
@@ -479,7 +479,7 @@ model MealPlan {
   description String?
   pricePerPax Decimal        @db.Decimal(10, 2)
   isActive    Boolean        @default(true)
-  vendor      CateringVendor @relation(fields: [vendorId], references: [id])
+  vendor      CateringVendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   bookingCaterings BookingCatering[]
 
@@ -493,7 +493,7 @@ model BookingCatering {
   paxCount   Int
   notes      String?
   booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id])
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
 
   @@map("booking_caterings")
 }
