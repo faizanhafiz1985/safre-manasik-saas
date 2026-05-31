@@ -75,6 +75,18 @@ async function sendEmail({ to, subject, html, text }) {
   }
 }
 
+// ── HTML escaping ────────────────────────────────────────────────────────────
+// All user-supplied strings interpolated into HTML email templates must go
+// through esc() to prevent stored XSS via email clients.
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Reusable templates ──────────────────────────────────────────────────────
 
 function applicationReceivedHtml({ adminName, tenantName }) {
@@ -84,8 +96,8 @@ function applicationReceivedHtml({ adminName, tenantName }) {
         <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
       </div>
       <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
-        <p>Dear ${adminName},</p>
-        <p>Thank you for applying to host <strong>${tenantName}</strong> on Safre Manasik.</p>
+        <p>Dear ${esc(adminName)},</p>
+        <p>Thank you for applying to host <strong>${esc(tenantName)}</strong> on Safre Manasik.</p>
         <p>Your application has been received and is under review by our team.
            We typically respond within 1 business day. You'll receive another
            email as soon as we make a decision.</p>
@@ -105,15 +117,15 @@ function applicationApprovedHtml({ adminName, tenantName, loginUrl, adminEmail }
         <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
       </div>
       <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
-        <p>Dear ${adminName},</p>
-        <p>Great news — your application for <strong>${tenantName}</strong> has been
+        <p>Dear ${esc(adminName)},</p>
+        <p>Great news — your application for <strong>${esc(tenantName)}</strong> has been
            <strong style="color:#2E9E6B">approved</strong>!</p>
         <p>You can now sign in to your workspace:</p>
         <p style="text-align:center;margin:24px 0">
-          <a href="${loginUrl}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:bold;display:inline-block">Open Safre Manasik</a>
+          <a href="${esc(loginUrl)}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:bold;display:inline-block">Open Safre Manasik</a>
         </p>
         <p style="background:#F3F8F5;padding:12px 16px;border-radius:6px;border-left:4px solid #C9A227">
-          <strong>Login email:</strong> ${adminEmail}<br>
+          <strong>Login email:</strong> ${esc(adminEmail)}<br>
           <strong>Password:</strong> the one you set during signup
         </p>
         <p>Your account is on the <strong>Starter</strong> plan trial. Add packages, hotels, and bookings to get started.</p>
@@ -131,11 +143,11 @@ function applicationRejectedHtml({ adminName, tenantName, reason }) {
         <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
       </div>
       <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
-        <p>Dear ${adminName},</p>
+        <p>Dear ${esc(adminName)},</p>
         <p>Thank you for your interest in Safre Manasik. After reviewing your
-           application for <strong>${tenantName}</strong>, we are unable to
+           application for <strong>${esc(tenantName)}</strong>, we are unable to
            approve it at this time.</p>
-        ${reason ? `<p style="background:#FFF4E6;padding:12px 16px;border-radius:6px;border-left:4px solid #C0392B"><strong>Reason:</strong> ${reason}</p>` : ''}
+        ${reason ? `<p style="background:#FFF4E6;padding:12px 16px;border-radius:6px;border-left:4px solid #C0392B"><strong>Reason:</strong> ${esc(reason)}</p>` : ''}
         <p>If you believe this decision was made in error, or if you'd like to
            provide additional information, please reply to this email.</p>
         <p style="margin-top:24px;color:#888;font-size:12px">Safre Manasik Platform</p>
@@ -149,14 +161,14 @@ function superAdminNewApplicationHtml({ application }) {
       <h3 style="color:#C9A227">New Tenant Application — Action Required</h3>
       <p>A new agency has applied to join Safre Manasik:</p>
       <table style="border-collapse:collapse;width:100%">
-        <tr><td style="padding:4px 8px;color:#666">Organisation</td><td style="padding:4px 8px"><strong>${application.tenantName}</strong></td></tr>
-        <tr><td style="padding:4px 8px;color:#666">Admin</td><td style="padding:4px 8px">${application.adminName} &lt;${application.adminEmail}&gt;</td></tr>
-        <tr><td style="padding:4px 8px;color:#666">Phone</td><td style="padding:4px 8px">${application.contactPhone || '—'}</td></tr>
-        <tr><td style="padding:4px 8px;color:#666">Country</td><td style="padding:4px 8px">${application.country || '—'}</td></tr>
-        <tr><td style="padding:4px 8px;color:#666">City</td><td style="padding:4px 8px">${application.city || '—'}</td></tr>
-        <tr><td style="padding:4px 8px;color:#666">CR Number</td><td style="padding:4px 8px">${application.crNumber || '—'}</td></tr>
-        <tr><td style="padding:4px 8px;color:#666">VAT Number</td><td style="padding:4px 8px">${application.vatNumber || '—'}</td></tr>
-        <tr><td style="padding:4px 8px;color:#666">Umrah Licence</td><td style="padding:4px 8px">${application.umrahLicenseNumber || '—'}</td></tr>
+        <tr><td style="padding:4px 8px;color:#666">Organisation</td><td style="padding:4px 8px"><strong>${esc(application.tenantName)}</strong></td></tr>
+        <tr><td style="padding:4px 8px;color:#666">Admin</td><td style="padding:4px 8px">${esc(application.adminName)} &lt;${esc(application.adminEmail)}&gt;</td></tr>
+        <tr><td style="padding:4px 8px;color:#666">Phone</td><td style="padding:4px 8px">${esc(application.contactPhone || '—')}</td></tr>
+        <tr><td style="padding:4px 8px;color:#666">Country</td><td style="padding:4px 8px">${esc(application.country || '—')}</td></tr>
+        <tr><td style="padding:4px 8px;color:#666">City</td><td style="padding:4px 8px">${esc(application.city || '—')}</td></tr>
+        <tr><td style="padding:4px 8px;color:#666">CR Number</td><td style="padding:4px 8px">${esc(application.crNumber || '—')}</td></tr>
+        <tr><td style="padding:4px 8px;color:#666">VAT Number</td><td style="padding:4px 8px">${esc(application.vatNumber || '—')}</td></tr>
+        <tr><td style="padding:4px 8px;color:#666">Umrah Licence</td><td style="padding:4px 8px">${esc(application.umrahLicenseNumber || '—')}</td></tr>
       </table>
       <p style="margin-top:16px">Log in to the platform and visit <strong>Applications</strong> in the Platform Admin section to approve or reject.</p>
     </div>`;
@@ -167,18 +179,18 @@ function customerWelcomeHtml({ adminName, customerName, email, password, loginUr
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1B4B35">
       <div style="background:#1B4B35;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0">
         <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
-        <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8)">${tenantName}</p>
+        <p style="margin:4px 0 0;font-size:13px;color:rgba(255,255,255,0.8)">${esc(tenantName)}</p>
       </div>
       <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
-        <p>Dear ${customerName},</p>
-        <p>Your account has been created on <strong>${tenantName}</strong>'s Safre Manasik portal by ${adminName}.</p>
+        <p>Dear ${esc(customerName)},</p>
+        <p>Your account has been created on <strong>${esc(tenantName)}</strong>'s Safre Manasik portal by ${esc(adminName)}.</p>
         <p style="background:#F3F8F5;padding:14px 18px;border-radius:8px;border-left:4px solid #C9A227">
           <strong>Your login details:</strong><br>
-          <span style="color:#555">Email:</span> <strong>${email}</strong><br>
-          <span style="color:#555">Password:</span> <strong>${password}</strong>
+          <span style="color:#555">Email:</span> <strong>${esc(email)}</strong><br>
+          <span style="color:#555">Password:</span> <strong>${esc(password)}</strong>
         </p>
         <p style="text-align:center;margin:24px 0">
-          <a href="${loginUrl}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:bold;display:inline-block">Sign In Now</a>
+          <a href="${esc(loginUrl)}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:bold;display:inline-block">Sign In Now</a>
         </p>
         <p style="color:#C0392B;font-size:13px">Please change your password after your first login for security.</p>
         <p style="margin-top:24px;color:#888;font-size:12px">Safre Manasik · Umrah Travel Management Platform</p>
@@ -193,11 +205,11 @@ function forgotUsernameHtml({ name, email }) {
         <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
       </div>
       <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
-        <p>Dear ${name},</p>
+        <p>Dear ${esc(name)},</p>
         <p>We received a request to look up the account associated with this email address.</p>
         <p style="background:#F3F8F5;padding:14px 18px;border-radius:8px;border-left:4px solid #C9A227">
-          <strong>Account Name:</strong> ${name}<br>
-          <strong>Login Email:</strong> ${email}
+          <strong>Account Name:</strong> ${esc(name)}<br>
+          <strong>Login Email:</strong> ${esc(email)}
         </p>
         <p>You can use the email address above to sign in to Safre Manasik.</p>
         <p style="background:#FFF8E7;padding:12px 16px;border-radius:6px;font-size:13px;color:#856404">
@@ -219,10 +231,10 @@ function passwordResetHtml({ name, resetUrl }) {
         <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
       </div>
       <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
-        <p>Dear ${name},</p>
+        <p>Dear ${esc(name)},</p>
         <p>We received a request to reset the password for your Safre Manasik account.</p>
         <p style="text-align:center;margin:28px 0">
-          <a href="${resetUrl}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:bold;font-size:15px;display:inline-block">Reset My Password</a>
+          <a href="${esc(resetUrl)}" style="background:#1B4B35;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:bold;font-size:15px;display:inline-block">Reset My Password</a>
         </p>
         <p style="color:#888;font-size:13px">This link expires in <strong>1 hour</strong>. If you didn't request a password reset, you can safely ignore this email — your password will not change.</p>
         <p style="margin-top:24px;color:#888;font-size:12px">Safre Manasik · Umrah Travel Management Platform</p>

@@ -48,6 +48,10 @@ if (Sentry && process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.requestHandler());
 }
 
+// Railway (and most PaaS) sit behind a reverse proxy/CDN. Trust the first hop so
+// that req.ip reflects the real client IP for rate limiting and logging.
+app.set('trust proxy', 1);
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
@@ -56,7 +60,10 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow server-to-server (no origin) and listed origins
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
+    // Return a 400-level status instead of 500 for CORS rejections
+    const err = new Error(`CORS: origin ${origin} not allowed`);
+    err.status = 403;
+    callback(err);
   },
   credentials: true,
 }));
