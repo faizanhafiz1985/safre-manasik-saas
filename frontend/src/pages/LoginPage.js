@@ -76,7 +76,16 @@ export default function LoginPage() {
                 {...register('password', { required: 'Password is required' })}
               />
               <Box sx={{ textAlign: 'right', mb: 2.5 }}>
-                <Link to="/forgot-password" style={{ fontSize: '0.82rem', color: '#1B4B35', fontWeight: 600, textDecoration: 'none' }}>
+                <Link
+                  to="/forgot-password"
+                  style={{
+                    fontSize: '0.85rem',
+                    color: '#C9A227',
+                    fontWeight: 700,
+                    textDecoration: 'underline',
+                    textUnderlineOffset: '2px',
+                  }}
+                >
                   Forgot password?
                 </Link>
               </Box>
