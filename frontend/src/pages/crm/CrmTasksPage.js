@@ -5,8 +5,9 @@ import {
   TablePagination, Dialog, DialogTitle, DialogContent, DialogActions,
   Grid, CircularProgress, Snackbar, Alert, IconButton, Tooltip, Tabs, Tab,
 } from '@mui/material';
-import { Add, Check, Cancel, Refresh, Warning } from '@mui/icons-material';
-import { crmTasks } from '../../services/crmApi';
+import { Add, Check, Cancel, Refresh, Warning, Edit } from '@mui/icons-material';
+import { crmTasks, crmLeads } from '../../services/crmApi';
+import api from '../../services/api';
 
 const STATUS_COLORS = {
   PENDING: 'default', IN_PROGRESS: 'info', COMPLETED: 'success',
@@ -24,9 +25,22 @@ export default function CrmTasksPage() {
   const [tab, setTab] = useState(0); // 0=All, 1=Today, 2=Overdue
   const [statusFilter, setStatusFilter] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [users, setUsers] = useState([]);
+  const [leadOptions, setLeadOptions] = useState([]);
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Active staff for "Assigned To" + leads for the "Lead" dropdown
+  useEffect(() => {
+    api.get('/users/agents')
+      .then((r) => setUsers(Array.isArray(r.data) ? r.data : (r.data.data || [])))
+      .catch(() => setUsers([]));
+    crmLeads.getAll({ page: 1, limit: 200 })
+      .then((r) => setLeadOptions(r.data.data || []))
+      .catch(() => setLeadOptions([]));
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -40,13 +54,40 @@ export default function CrmTasksPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const openNew = () => { setEditingTask(null); setForm(EMPTY_FORM); setDialogOpen(true); };
+  const openEdit = (t) => {
+    setEditingTask(t);
+    setForm({
+      title: t.title || '',
+      description: t.description || '',
+      dueAt: t.dueAt ? t.dueAt.substring(0, 16) : '',
+      reminderAt: t.reminderAt ? t.reminderAt.substring(0, 16) : '',
+      priority: t.priority || 'MEDIUM',
+      assignedToId: t.assignedToId || '',
+      leadId: t.leadId || '',
+    });
+    setDialogOpen(true);
+  };
+
   const handleSave = async () => {
     if (!form.title.trim()) return setSnackbar({ open: true, message: 'Title is required', severity: 'error' });
     setSaving(true);
+    const payload = {
+      ...form,
+      dueAt: form.dueAt || null,
+      reminderAt: form.reminderAt || null,
+      leadId: form.leadId || null,
+      assignedToId: form.assignedToId || null,
+    };
     try {
-      await crmTasks.create({ ...form, dueAt: form.dueAt || null, reminderAt: form.reminderAt || null });
+      if (editingTask) {
+        await crmTasks.update(editingTask.id, payload);
+        setSnackbar({ open: true, message: 'Task updated', severity: 'success' });
+      } else {
+        await crmTasks.create(payload);
+        setSnackbar({ open: true, message: 'Task created', severity: 'success' });
+      }
       setDialogOpen(false);
-      setSnackbar({ open: true, message: 'Task created', severity: 'success' });
       load();
     } catch (e) {
       setSnackbar({ open: true, message: e.response?.data?.error || 'Failed', severity: 'error' });
@@ -81,7 +122,7 @@ export default function CrmTasksPage() {
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Tooltip title="Refresh"><IconButton onClick={load}><Refresh /></IconButton></Tooltip>
-          <Button variant="contained" startIcon={<Add />} onClick={() => { setForm(EMPTY_FORM); setDialogOpen(true); }}
+          <Button variant="contained" startIcon={<Add />} onClick={openNew}
             sx={{ bgcolor: '#1B4B35', '&:hover': { bgcolor: '#2E6B4F' } }}>
             Add Task
           </Button>
@@ -152,6 +193,9 @@ export default function CrmTasksPage() {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="Edit">
+                          <IconButton size="small" onClick={() => openEdit(t)}><Edit fontSize="small" /></IconButton>
+                        </Tooltip>
                         {!['COMPLETED','CANCELLED'].includes(t.status) && (
                           <>
                             <Tooltip title="Complete">
@@ -185,7 +229,7 @@ export default function CrmTasksPage() {
 
       {/* Create Task Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, color: '#1B4B35' }}>Create Task</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700, color: '#1B4B35' }}>{editingTask ? 'Edit Task' : 'Create Task'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid item xs={12}>
@@ -195,6 +239,28 @@ export default function CrmTasksPage() {
             <Grid item xs={12}>
               <TextField fullWidth size="small" label="Description" multiline rows={2} value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Lead</InputLabel>
+                <Select value={form.leadId || ''} onChange={(e) => setForm({ ...form, leadId: e.target.value })} label="Lead">
+                  <MenuItem value=""><em>No lead</em></MenuItem>
+                  {leadOptions.map((l) => (
+                    <MenuItem key={l.id} value={l.id}>{l.fullName}{l.phone ? ` — ${l.phone}` : ''}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Assigned To</InputLabel>
+                <Select value={form.assignedToId || ''} onChange={(e) => setForm({ ...form, assignedToId: e.target.value })} label="Assigned To">
+                  <MenuItem value=""><em>Unassigned</em></MenuItem>
+                  {users.map((u) => (
+                    <MenuItem key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ''}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth size="small">
@@ -220,7 +286,7 @@ export default function CrmTasksPage() {
           <Button onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
           <Button variant="contained" onClick={handleSave} disabled={saving}
             sx={{ bgcolor: '#1B4B35', '&:hover': { bgcolor: '#2E6B4F' } }}>
-            {saving ? <CircularProgress size={18} color="inherit" /> : 'Create Task'}
+            {saving ? <CircularProgress size={18} color="inherit" /> : editingTask ? 'Update Task' : 'Create Task'}
           </Button>
         </DialogActions>
       </Dialog>

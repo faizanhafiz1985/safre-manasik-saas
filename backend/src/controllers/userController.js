@@ -144,11 +144,13 @@ const remove = async (req, res, next) => {
   }
 };
 
+// Returns active staff who can be assigned work (CRM leads, tasks, etc.).
+// Includes both ADMIN and AGENT roles so admins can be assignees too.
 const getAgents = async (req, res, next) => {
   try {
     const agents = await prisma.user.findMany({
-      where: { role: 'AGENT', isActive: true },
-      select: { id: true, name: true, email: true, companyName: true, phone: true },
+      where: { role: { in: ['ADMIN', 'AGENT'] }, isActive: true },
+      select: { id: true, name: true, email: true, role: true, companyName: true, phone: true },
       orderBy: { name: 'asc' },
     });
     res.json(agents);

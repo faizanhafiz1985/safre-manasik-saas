@@ -3,14 +3,16 @@ import {
   Box, Card, Table, TableHead, TableRow, TableCell, TableBody, Typography,
   Button, TextField, InputAdornment, IconButton, Chip, Select, MenuItem,
   FormControl, InputLabel, TablePagination, Dialog, DialogTitle, DialogContent,
-  DialogActions, Grid, Alert, CircularProgress, Tooltip, Snackbar,
+  DialogActions, Grid, Alert, CircularProgress, Tooltip, Snackbar, Autocomplete,
 } from '@mui/material';
 import {
   Search, Add, Edit, Delete, Phone, WhatsApp, Refresh,
   FilterList, Download, Upload,
 } from '@mui/icons-material';
 import { crmLeads } from '../../services/crmApi';
+import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { COUNTRIES, CITIES_BY_COUNTRY } from '../../constants/locations';
 
 const STATUS_COLORS = {
   NEW: 'default', CONTACTED: 'warning', QUALIFIED: 'info',
@@ -28,10 +30,38 @@ const SOURCE_LABELS = {
 };
 
 const EMPTY_FORM = {
-  fullName: '', phone: '', whatsappNumber: '', email: '', country: '', nationality: '', city: '',
-  travelInterest: '', packageInterest: '', budget: '', numberOfTravelers: '',
+  fullName: '', phone: '', whatsappNumber: '', email: '', country: '', city: '',
+  packageInterest: '', budget: '', numberOfTravelers: '',
   source: 'MANUAL', status: 'NEW', priority: 'MEDIUM', notes: '',
   preferredDateFrom: '', preferredDateTo: '', assignedToId: '',
+};
+
+// Validate the lead form. Returns an object of field -> error message.
+const validateLead = (form) => {
+  const errs = {};
+  const name = (form.fullName || '').trim();
+  if (!name) errs.fullName = 'Full name is required';
+  else if (!/^[A-Za-z؀-ۿ\s.'-]+$/.test(name)) errs.fullName = 'Name may contain letters only (no numbers)';
+
+  const phoneDigits = (form.phone || '').replace(/\D/g, '');
+  const waDigits = (form.whatsappNumber || '').replace(/\D/g, '');
+
+  if (form.phone && !/^\d{12,15}$/.test(phoneDigits)) errs.phone = 'Enter 12–15 digits incl. country code, e.g. 966501234567';
+  if (form.whatsappNumber && !/^\d{12,15}$/.test(waDigits)) errs.whatsappNumber = 'Enter 12–15 digits incl. country code, e.g. 966501234567';
+
+  // Either phone OR WhatsApp number is mandatory
+  if (!form.phone && !form.whatsappNumber) {
+    errs.phone = 'Provide a phone or WhatsApp number';
+    errs.whatsappNumber = 'Provide a phone or WhatsApp number';
+  }
+
+  if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Enter a valid email address';
+
+  // Budget mandatory and numeric
+  if (form.budget === '' || form.budget === null || form.budget === undefined) errs.budget = 'Budget is required';
+  else if (!/^\d+(\.\d+)?$/.test(String(form.budget))) errs.budget = 'Budget must be a number';
+
+  return errs;
 };
 
 export default function CrmLeadsPage() {
@@ -47,8 +77,17 @@ export default function CrmLeadsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [formErrors, setFormErrors] = useState({});
+  const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Active staff (ADMIN + AGENT) for the "Assigned To" dropdown
+  useEffect(() => {
+    api.get('/users/agents')
+      .then((r) => setUsers(Array.isArray(r.data) ? r.data : (r.data.data || [])))
+      .catch(() => setUsers([]));
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -66,7 +105,11 @@ export default function CrmLeadsPage() {
   useEffect(() => { load(); }, [load]);
 
   const handleSave = async () => {
-    if (!form.fullName.trim()) return setSnackbar({ open: true, message: 'Full name is required', severity: 'error' });
+    const errs = validateLead(form);
+    setFormErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      return setSnackbar({ open: true, message: 'Please fix the highlighted fields', severity: 'error' });
+    }
     setSaving(true);
     try {
       if (editingLead) {
@@ -83,8 +126,8 @@ export default function CrmLeadsPage() {
     } finally { setSaving(false); }
   };
 
-  const openNew = () => { setEditingLead(null); setForm(EMPTY_FORM); setDialogOpen(true); };
-  const openEdit = (l) => { setEditingLead(l); setForm({ ...EMPTY_FORM, ...l, budget: l.budget || '', numberOfTravelers: l.numberOfTravelers || '', preferredDateFrom: l.preferredDateFrom ? l.preferredDateFrom.split('T')[0] : '', preferredDateTo: l.preferredDateTo ? l.preferredDateTo.split('T')[0] : '' }); setDialogOpen(true); };
+  const openNew = () => { setEditingLead(null); setForm(EMPTY_FORM); setFormErrors({}); setDialogOpen(true); };
+  const openEdit = (l) => { setEditingLead(l); setFormErrors({}); setForm({ ...EMPTY_FORM, ...l, budget: l.budget || '', numberOfTravelers: l.numberOfTravelers || '', assignedToId: l.assignedToId || '', preferredDateFrom: l.preferredDateFrom ? l.preferredDateFrom.split('T')[0] : '', preferredDateTo: l.preferredDateTo ? l.preferredDateTo.split('T')[0] : '' }); setDialogOpen(true); };
 
   const handleArchive = async (id) => {
     if (!window.confirm('Archive this lead?')) return;
@@ -225,45 +268,51 @@ export default function CrmLeadsPage() {
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" label="Full Name *" value={form.fullName}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+                error={!!formErrors.fullName} helperText={formErrors.fullName || 'Letters only'}
+                onChange={(e) => setForm({ ...form, fullName: e.target.value.replace(/[0-9]/g, '') })} />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" label="Phone" value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <TextField fullWidth size="small" label="Phone *" value={form.phone}
+                error={!!formErrors.phone} helperText={formErrors.phone || 'e.g. 966501234567 (12 digits, country code first)'}
+                onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^\d+\s]/g, '') })} />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" label="WhatsApp Number" value={form.whatsappNumber}
-                onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value })} />
+              <TextField fullWidth size="small" label="WhatsApp Number *" value={form.whatsappNumber}
+                error={!!formErrors.whatsappNumber} helperText={formErrors.whatsappNumber || 'e.g. 966501234567 — phone or WhatsApp required'}
+                onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value.replace(/[^\d+\s]/g, '') })} />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" label="Email" value={form.email}
+                error={!!formErrors.email} helperText={formErrors.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <TextField fullWidth size="small" label="Country" value={form.country}
-                onChange={(e) => setForm({ ...form, country: e.target.value })} />
+              <Autocomplete
+                size="small" options={COUNTRIES} value={form.country || null}
+                onChange={(_, v) => setForm({ ...form, country: v || '', city: '' })}
+                renderInput={(params) => <TextField {...params} label="Country" />}
+              />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <TextField fullWidth size="small" label="Nationality" value={form.nationality}
-                onChange={(e) => setForm({ ...form, nationality: e.target.value })} />
+              <Autocomplete
+                freeSolo size="small"
+                options={CITIES_BY_COUNTRY[form.country] || []}
+                value={form.city || ''}
+                onChange={(_, v) => setForm({ ...form, city: v || '' })}
+                onInputChange={(_, v) => setForm((f) => ({ ...f, city: v }))}
+                renderInput={(params) => <TextField {...params} label="City" />}
+              />
             </Grid>
             <Grid item xs={12} sm={4}>
-              <TextField fullWidth size="small" label="City" value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" label="Travel Interest" value={form.travelInterest}
-                onChange={(e) => setForm({ ...form, travelInterest: e.target.value })} />
+              <TextField fullWidth size="small" label="Budget (SAR) *" type="number" value={form.budget}
+                error={!!formErrors.budget} helperText={formErrors.budget}
+                onChange={(e) => setForm({ ...form, budget: e.target.value })} />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" label="Package Interest" value={form.packageInterest}
                 onChange={(e) => setForm({ ...form, packageInterest: e.target.value })} />
             </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField fullWidth size="small" label="Budget (SAR)" type="number" value={form.budget}
-                onChange={(e) => setForm({ ...form, budget: e.target.value })} />
-            </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" label="No. of Travelers" type="number" value={form.numberOfTravelers}
                 onChange={(e) => setForm({ ...form, numberOfTravelers: e.target.value })} />
             </Grid>
@@ -289,6 +338,17 @@ export default function CrmLeadsPage() {
                 <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} label="Status">
                   {['NEW','CONTACTED','QUALIFIED','PROPOSAL_SENT','NEGOTIATION','CONFIRMED','CONVERTED','LOST','FOLLOW_UP_PENDING'].map((s) => (
                     <MenuItem key={s} value={s}>{s.replace(/_/g, ' ')}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Assigned To</InputLabel>
+                <Select value={form.assignedToId || ''} onChange={(e) => setForm({ ...form, assignedToId: e.target.value })} label="Assigned To">
+                  <MenuItem value=""><em>Unassigned</em></MenuItem>
+                  {users.map((u) => (
+                    <MenuItem key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ''}</MenuItem>
                   ))}
                 </Select>
               </FormControl>

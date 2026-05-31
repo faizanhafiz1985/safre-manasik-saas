@@ -19,6 +19,18 @@ const INTEGRATION_CONFIGS = {
       { key: 'accessToken', label: 'Access Token', hint: 'System User Access Token with whatsapp_business_messaging permission' },
       { key: 'appSecret', label: 'App Secret', hint: 'Meta App Secret for webhook signature verification' },
     ],
+    guide: {
+      what: 'Connect your WhatsApp Business number so that any message a customer sends automatically appears in the CRM Inbox and creates a new Lead.',
+      prereq: 'A Meta (Facebook) Business account + a WhatsApp Business API number registered at developers.facebook.com.',
+      steps: [
+        'Go to developers.facebook.com → My Apps → create/select a Business app.',
+        'Add the “WhatsApp” product. Under API Setup, copy the Phone Number ID.',
+        'Create a System User Access Token with the whatsapp_business_messaging permission and paste it as Access Token.',
+        'Open App Settings → Basic and copy the App Secret.',
+        'Click “Save & Connect” below — a Webhook URL and Verify Token will appear.',
+        'Back in Meta → WhatsApp → Configuration, paste the Webhook URL and Verify Token, then subscribe to the “messages” field.',
+      ],
+    },
   },
   FACEBOOK: {
     icon: <Facebook sx={{ color: '#1877F2' }} />,
@@ -30,6 +42,17 @@ const INTEGRATION_CONFIGS = {
       { key: 'accessToken', label: 'Page Access Token', hint: 'Long-lived Page Access Token with leads_retrieval permission' },
       { key: 'appSecret', label: 'App Secret', hint: 'Meta App Secret for signature verification' },
     ],
+    guide: {
+      what: 'When someone fills in one of your Facebook Lead Ad forms, the lead is pushed into this CRM instantly — no CSV downloads needed.',
+      prereq: 'A Facebook Page running Lead Ads + a Meta Developer app with the leads_retrieval permission.',
+      steps: [
+        'Open your Facebook Page → Settings and copy the Page ID.',
+        'In developers.facebook.com, generate a long-lived Page Access Token with leads_retrieval permission.',
+        'Copy the App Secret from App Settings → Basic.',
+        'Paste all three values below and click “Save & Connect”.',
+        'Copy the generated Webhook URL + Verify Token into Meta → Webhooks and subscribe to the “leadgen” field for your Page.',
+      ],
+    },
   },
   INSTAGRAM: {
     icon: <Instagram sx={{ color: '#E4405F' }} />,
@@ -41,6 +64,17 @@ const INTEGRATION_CONFIGS = {
       { key: 'accessToken', label: 'Access Token', hint: 'Page Access Token with instagram_manage_messages permission' },
       { key: 'appSecret', label: 'App Secret', hint: 'Meta App Secret for signature verification' },
     ],
+    guide: {
+      what: 'Capture Instagram Direct Messages as CRM leads so enquiries from your Instagram business profile are never missed.',
+      prereq: 'An Instagram Business account linked to a Facebook Page + a Meta Developer app.',
+      steps: [
+        'Link your Instagram Business account to your Facebook Page (Instagram → Settings → Linked Accounts).',
+        'Copy the Instagram Business Account ID from Meta Business Suite.',
+        'Generate a Page Access Token with the instagram_manage_messages permission.',
+        'Copy the App Secret from App Settings → Basic, paste all values, and click “Save & Connect”.',
+        'Add the generated Webhook URL + Verify Token in Meta → Webhooks and subscribe to the “messages” field.',
+      ],
+    },
   },
 };
 
@@ -114,6 +148,25 @@ function IntegrationPanel({ type }) {
           />
         )}
       </Box>
+
+      {/* Setup guide — explains what to enter and where to get it */}
+      {config.guide && (
+        <Alert severity="info" icon={false} sx={{ mb: 2, bgcolor: '#F3F8F5', border: '1px solid #d6e7dc' }}>
+          <Typography variant="body2" fontWeight={700} gutterBottom>How this works</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>{config.guide.what}</Typography>
+          <Typography variant="caption" fontWeight={700} display="block">Before you start</Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>{config.guide.prereq}</Typography>
+          <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>Steps</Typography>
+          <Box component="ol" sx={{ m: 0, pl: 2.5 }}>
+            {config.guide.steps.map((s, i) => (
+              <Typography component="li" key={i} variant="caption" color="text.secondary" sx={{ mb: 0.4 }}>{s}</Typography>
+            ))}
+          </Box>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, fontStyle: 'italic' }}>
+            These integrations are optional. If you don't run paid Meta ads or a WhatsApp Business API number, you can leave them disconnected and add leads manually in the Leads tab.
+          </Typography>
+        </Alert>
+      )}
 
       {/* Webhook URL */}
       {integration?.webhookUrl && (

@@ -90,19 +90,22 @@ const getLeadReport = async (req, res, next) => {
     const validGroupBy = ['source', 'status', 'priority', 'assignedToId'];
     const field = validGroupBy.includes(groupBy) ? groupBy : 'source';
 
+    // Build the monthly-timeline query with positional params. We use
+    // $queryRawUnsafe (not the tagged template) so the optional date filters
+    // can be appended conditionally — `prisma.$raw` is not a valid function.
+    const timelineParams = [req.user.tenantId];
+    let timelineSql =
+      `SELECT DATE_TRUNC('month', "createdAt") AS month, COUNT(*)::int AS count
+         FROM crm_leads
+        WHERE "tenantId" = $1`;
+    if (dateFrom) { timelineParams.push(new Date(dateFrom)); timelineSql += ` AND "createdAt" >= $${timelineParams.length}`; }
+    if (dateTo)   { timelineParams.push(new Date(dateTo));   timelineSql += ` AND "createdAt" <= $${timelineParams.length}`; }
+    timelineSql += ' GROUP BY 1 ORDER BY 1';
+
     const [grouped, conversionFunnel, timeline] = await Promise.all([
       prisma.crmLead.groupBy({ by: [field], where, _count: true, orderBy: { _count: { [field]: 'desc' } } }),
       prisma.crmLead.groupBy({ by: ['status'], where, _count: true }),
-      // Monthly timeline (last 6 months)
-      prisma.$queryRaw`
-        SELECT DATE_TRUNC('month', "createdAt") as month, COUNT(*)::int as count
-        FROM crm_leads
-        WHERE "tenantId" = ${req.user.tenantId}
-          ${dateFrom ? prisma.$raw`AND "createdAt" >= ${new Date(dateFrom)}` : prisma.$raw``}
-          ${dateTo ? prisma.$raw`AND "createdAt" <= ${new Date(dateTo)}` : prisma.$raw``}
-        GROUP BY 1
-        ORDER BY 1
-      `.catch(() => []),
+      prisma.$queryRawUnsafe(timelineSql, ...timelineParams).catch(() => []),
     ]);
 
     res.json({ grouped, conversionFunnel, timeline });

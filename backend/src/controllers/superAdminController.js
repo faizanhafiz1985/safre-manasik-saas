@@ -409,21 +409,43 @@ const approveApplication = async (req, res, next) => {
       return { tenant, user, application: updated };
     });
 
-    // Email the new admin so they know they can log in.
+    // Email the new admin so they know they can log in. We AWAIT the send so we
+    // can report whether it actually went out — previously this was fire-and-forget
+    // and silent failures made it look like "no email was sent".
     const loginUrl = (process.env.FRONTEND_URL || 'https://app.safremanasik.com').replace(/\/$/, '') + '/login';
-    sendEmail({
-      to: app.adminEmail,
-      subject: `Welcome to Safre Manasik — ${app.tenantName} is approved`,
-      html: applicationApprovedHtml({
-        adminName: app.adminName,
-        tenantName: app.tenantName,
-        adminEmail: app.adminEmail,
-        loginUrl,
-      }),
-    }).catch(() => {});
+    let emailResult = { ok: false, mode: 'sent', error: 'not attempted' };
+    try {
+      emailResult = await sendEmail({
+        to: app.adminEmail,
+        subject: `Welcome to Safre Manasik — ${app.tenantName} is approved`,
+        html: applicationApprovedHtml({
+          adminName: app.adminName,
+          tenantName: app.tenantName,
+          adminEmail: app.adminEmail,
+          loginUrl,
+        }),
+      });
+    } catch (e) {
+      emailResult = { ok: false, mode: 'sent', error: e.message };
+    }
+
+    if (emailResult.ok && emailResult.mode === 'sent') {
+      console.log(`[approve] Welcome email sent to ${app.adminEmail}`);
+    } else if (emailResult.mode === 'logged') {
+      console.warn(`[approve] SMTP not configured — welcome email only logged, NOT delivered to ${app.adminEmail}`);
+    } else {
+      console.error(`[approve] Welcome email FAILED to ${app.adminEmail}: ${emailResult.error}`);
+    }
+
+    const emailMsg = emailResult.ok && emailResult.mode === 'sent'
+      ? 'Welcome email sent.'
+      : emailResult.mode === 'logged'
+        ? 'NOTE: SMTP is not configured, so the welcome email was not delivered. Configure SMTP_* env vars.'
+        : `WARNING: welcome email failed to send (${emailResult.error}). Check SMTP settings / Resend domain verification.`;
 
     res.json({
-      message: 'Application approved. Tenant and admin user created. Welcome email sent.',
+      message: `Application approved. Tenant and admin user created. ${emailMsg}`,
+      emailDelivered: emailResult.ok && emailResult.mode === 'sent',
       tenant: result.tenant,
       user: { id: result.user.id, email: result.user.email, name: result.user.name },
     });
