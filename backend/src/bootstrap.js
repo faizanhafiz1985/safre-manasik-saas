@@ -136,8 +136,50 @@ async function ensurePlanConfigs() {
   }
 }
 
+/**
+ * Purges ALL tenant data when PURGE_ALL_TENANTS=true is set.
+ *
+ * Safe-guards:
+ *   - Only runs if PURGE_ALL_TENANTS env var is exactly "true"
+ *   - Logs every step
+ *   - Does NOT delete SUPER_ADMIN user or PlanConfigs
+ *   - Remove the env var from Railway after the purge to prevent re-running
+ */
+async function purgeAllTenantsIfRequested() {
+  if (process.env.PURGE_ALL_TENANTS !== 'true') return;
+
+  logger.warn('[bootstrap] ⚠️  PURGE_ALL_TENANTS=true — starting full tenant purge...');
+
+  try {
+    // Count before
+    const tenantCount = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS n FROM tenants`);
+    const userCount   = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS n FROM users WHERE role != 'SUPER_ADMIN'`);
+    const bookingCount = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS n FROM bookings`);
+
+    logger.warn(`[bootstrap] About to delete: ${tenantCount[0].n} tenants, ${userCount[0].n} non-superadmin users, ${bookingCount[0].n} bookings (all cascaded data)`);
+
+    // Delete tenant applications
+    const appsDeleted = await prisma.$executeRawUnsafe(`DELETE FROM tenant_applications`);
+    logger.warn(`[bootstrap] Deleted ${appsDeleted} tenant applications`);
+
+    // Delete all tenants — CASCADE handles all related data automatically:
+    // Users, Packages, Bookings, Hotels, Vehicles, Routes, CateringVendors,
+    // Vouchers, Payments, Invoices, SystemConfigs, CrmConfig, CrmLeads, etc.
+    const tenantsDeleted = await prisma.$executeRawUnsafe(`DELETE FROM tenants`);
+    logger.warn(`[bootstrap] Deleted ${tenantsDeleted} tenants (all cascaded data removed)`);
+
+    // Verify SUPER_ADMIN still exists
+    const sa = await prisma.$queryRawUnsafe(`SELECT email FROM users WHERE role = 'SUPER_ADMIN'`);
+    logger.warn(`[bootstrap] ✅ Purge complete. SUPER_ADMIN preserved: ${sa[0]?.email}`);
+    logger.warn(`[bootstrap] ⚠️  REMOVE PURGE_ALL_TENANTS env var from Railway now to prevent re-running on next deploy!`);
+  } catch (err) {
+    logger.error(`[bootstrap] purgeAllTenants failed: ${err.message}`);
+  }
+}
+
 async function runBootstrap() {
   logger.info('[bootstrap] Running startup tasks...');
+  await purgeAllTenantsIfRequested(); // runs only if PURGE_ALL_TENANTS=true
   await ensureSuperAdmin();
   await ensurePlanConfigs();
   logger.info('[bootstrap] Startup tasks complete.');
