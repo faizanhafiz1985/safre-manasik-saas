@@ -73,12 +73,16 @@ app.use('/api', limiter);
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 app.use('/api/auth', authLimiter);
 
-app.get('/health', (req, res) => res.json({
-  status: 'ok',
-  timestamp: new Date(),
-  version: process.env.npm_package_version || '2.0.0-saas',
-  mode: process.env.NODE_ENV,
-}));
+app.get('/health', (req, res) => {
+  const { getMonitorStatus } = require('./monitor/uptimeMonitor');
+  res.json({
+    status: 'ok',
+    timestamp: new Date(),
+    version: process.env.npm_package_version || '2.0.0-saas',
+    mode: process.env.NODE_ENV,
+    monitor: getMonitorStatus(),
+  });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
@@ -117,9 +121,17 @@ if (require.main === module) {
     } catch (err) {
       logger.error(`Bootstrap failed: ${err.message}`);
     }
+    // Start uptime monitor after bootstrap
+    try {
+      const { startUptimeMonitor } = require('./monitor/uptimeMonitor');
+      startUptimeMonitor();
+    } catch (err) {
+      logger.error(`Uptime monitor failed to start: ${err.message}`);
+    }
   });
   const shutdown = (signal) => {
     logger.info(`${signal} received. Shutting down gracefully...`);
+    try { require('./monitor/uptimeMonitor').stopUptimeMonitor(); } catch {}
     server.close(() => { logger.info('HTTP server closed.'); process.exit(0); });
     setTimeout(() => { logger.warn('Force exit after 10s'); process.exit(1); }, 10000).unref();
   };
