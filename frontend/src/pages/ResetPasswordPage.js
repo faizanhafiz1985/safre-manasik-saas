@@ -36,13 +36,47 @@ export default function ResetPasswordPage() {
     }
   };
 
-  if (!token) {
+  // Determine if error is an expired/used/invalid token (set after a failed submit)
+  const isTokenError = error && (
+    error.includes('expired') || error.includes('already been used') ||
+    error.includes('invalid') || error.includes('Invalid')
+  );
+
+  if (!token || isTokenError) {
+    const headline = !token
+      ? 'No Reset Token Found'
+      : error.includes('expired')
+        ? 'Reset Link Expired'
+        : error.includes('used')
+          ? 'Link Already Used'
+          : 'Invalid Reset Link';
+
+    const detail = !token
+      ? 'This link is missing the reset token.'
+      : error;
+
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(160deg, #0D2B1A 0%, #1B4B35 45%, #2E6B4F 100%)', p: 2 }}>
-        <Alert severity="error" sx={{ maxWidth: 440 }}>
-          Invalid reset link. Please request a new one from the{' '}
-          <Link to="/forgot-password" style={{ color: '#C0392B', fontWeight: 700 }}>forgot password</Link> page.
-        </Alert>
+        <Card sx={{ borderRadius: 3, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxWidth: 440, width: '100%' }}>
+          <Box sx={{ bgcolor: '#C0392B', py: 1.2, textAlign: 'center' }}>
+            <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 700, letterSpacing: 1.5, fontSize: '0.75rem' }}>
+              RESET LINK PROBLEM
+            </Typography>
+          </Box>
+          <CardContent sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="h6" fontWeight={700} color="#C0392B" gutterBottom>{headline}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>{detail}</Typography>
+            <Button
+              fullWidth variant="contained" component={Link} to="/forgot-password"
+              sx={{ fontWeight: 700, borderRadius: 2, mb: 1.5, background: 'linear-gradient(135deg, #2E6B4F 0%, #1B4B35 100%)' }}
+            >
+              Request New Reset Link
+            </Button>
+            <Button fullWidth variant="text" component={Link} to="/login" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+              Back to Login
+            </Button>
+          </CardContent>
+        </Card>
       </Box>
     );
   }

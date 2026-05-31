@@ -186,6 +186,32 @@ function customerWelcomeHtml({ adminName, customerName, email, password, loginUr
     </div>`;
 }
 
+function forgotUsernameHtml({ name, email }) {
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1B4B35">
+      <div style="background:#1B4B35;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0">
+        <h2 style="margin:0;color:#C9A227">Safre Manasik</h2>
+      </div>
+      <div style="background:#fff;padding:24px;border:1px solid #eee;border-top:none;border-radius:0 0 8px 8px">
+        <p>Dear ${name},</p>
+        <p>We received a request to look up the account associated with this email address.</p>
+        <p style="background:#F3F8F5;padding:14px 18px;border-radius:8px;border-left:4px solid #C9A227">
+          <strong>Account Name:</strong> ${name}<br>
+          <strong>Login Email:</strong> ${email}
+        </p>
+        <p>You can use the email address above to sign in to Safre Manasik.</p>
+        <p style="background:#FFF8E7;padding:12px 16px;border-radius:6px;font-size:13px;color:#856404">
+          <strong>Security Notice:</strong> If you did not request this information, please ignore this email.
+          Your account details have not been changed.
+        </p>
+        <p style="margin-top:24px;color:#888;font-size:12px">
+          Safre Manasik · Umrah Travel Management Platform<br>
+          If you need further help, contact our support team.
+        </p>
+      </div>
+    </div>`;
+}
+
 function passwordResetHtml({ name, resetUrl }) {
   return `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1B4B35">
@@ -211,6 +237,7 @@ module.exports = {
   applicationRejectedHtml,
   superAdminNewApplicationHtml,
   customerWelcomeHtml,
+  forgotUsernameHtml,
   passwordResetHtml,
   CONFIGURED,
 };

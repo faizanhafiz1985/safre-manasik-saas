@@ -75,6 +75,26 @@ async function ensureSuperAdmin() {
   }
 }
 
+async function ensurePasswordResetTokensTable() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id          VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "userId"    VARCHAR(36)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token       VARCHAR(128) UNIQUE NOT NULL,
+        "expiresAt" TIMESTAMPTZ  NOT NULL,
+        "usedAt"    TIMESTAMPTZ,
+        "createdAt" TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_prt_token   ON password_reset_tokens(token)`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_prt_user_id ON password_reset_tokens("userId")`);
+    logger.info('[bootstrap] password_reset_tokens table ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensurePasswordResetTokensTable failed: ${err.message}`);
+  }
+}
+
 async function ensurePlanConfigs() {
   try {
     const existing = await prisma.$queryRawUnsafe(
@@ -182,6 +202,7 @@ async function runBootstrap() {
   await purgeAllTenantsIfRequested(); // runs only if PURGE_ALL_TENANTS=true
   await ensureSuperAdmin();
   await ensurePlanConfigs();
+  await ensurePasswordResetTokensTable();
   logger.info('[bootstrap] Startup tasks complete.');
 }
 

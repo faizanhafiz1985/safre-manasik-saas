@@ -1,9 +1,22 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const ctrl = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 const { tenantScope } = require('../middleware/tenant');
 const validate = require('../middleware/validate');
+
+// ── Rate limiter: 3 attempts per IP per 15 minutes for sensitive recovery endpoints
+const recoveryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please wait 15 minutes before trying again.' },
+  // Skip successful requests — only count failed or all attempts depending on strictness.
+  // Here we count all attempts (most secure for auth flows).
+  skipSuccessfulRequests: false,
+});
 
 // Tenant signup: creates a new tenant + admin user
 router.post('/signup-tenant',
@@ -19,13 +32,28 @@ router.post('/login',
   [body('email').isEmail(), body('password').notEmpty()],
   validate, ctrl.login);
 
-// Forgot / reset password (no auth required — user is locked out)
+// ── Forgot Username: user enters email → receives email with their account name
+router.post('/forgot-username',
+  recoveryLimiter,
+  [body('email').isEmail().withMessage('Valid email address is required')],
+  validate,
+  ctrl.forgotUsername);
+
+// ── Forgot Password: user enters email → receives secure reset link (DB token, single-use, 1h expiry)
 router.post('/forgot-password',
-  [body('email').isEmail()],
-  validate, ctrl.forgotPassword);
+  recoveryLimiter,
+  [body('email').isEmail().withMessage('Valid email address is required')],
+  validate,
+  ctrl.forgotPassword);
+
+// ── Reset Password: validates DB token, sets new password, invalidates token
 router.post('/reset-password',
-  [body('token').notEmpty(), body('newPassword').isLength({ min: 6 })],
-  validate, ctrl.resetPassword);
+  [
+    body('token').notEmpty().withMessage('Reset token is required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  ],
+  validate,
+  ctrl.resetPassword);
 
 router.get('/me', authenticate, tenantScope, ctrl.me);
 router.put('/profile', authenticate, tenantScope, ctrl.updateProfile);

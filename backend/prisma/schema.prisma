@@ -254,6 +254,7 @@ model User {
   crmConvsAssigned    CrmConversation[]       @relation("CrmConvAgent")
   crmMessagesSent     CrmMessage[]            @relation("CrmMsgSender")
   crmNotifications    CrmNotification[]       @relation("CrmUserNotifications")
+  passwordResetTokens PasswordResetToken[]
 
   @@index([tenantId])
   @@index([role])
@@ -1043,4 +1044,21 @@ model CrmNotification {
   @@index([tenantId, userId, isRead])
   @@index([tenantId, createdAt])
   @@map("crm_notifications")
+}
+
+// ─── PasswordResetToken ── Single-use DB-stored reset tokens ────────────────
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique   // 64-char hex from crypto.randomBytes(32)
+  expiresAt DateTime
+  usedAt    DateTime?           // set when consumed — prevents reuse
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
