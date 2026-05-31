@@ -6,7 +6,7 @@ import {
   Tooltip, Alert, CircularProgress, Divider,
 } from '@mui/material';
 import {
-  Business, People, BookOnline, AttachMoney, PauseCircle, PlayCircle, Edit,
+  Business, People, BookOnline, AttachMoney, PauseCircle, PlayCircle, Edit, Delete,
   BugReport, CheckCircle, Warning, Error as ErrorIcon, Refresh, OpenInNew,
   Email, Payment, AdminPanelSettings, HealthAndSafety,
 } from '@mui/icons-material';
@@ -25,8 +25,9 @@ const checkIcon = (status) => {
 export default function SuperAdminDashboardPage() {
   const [stats, setStats]       = useState(null);
   const [tenants, setTenants]   = useState([]);
-  const [editTenant, setEditTenant] = useState(null);
-  const [diag, setDiag]         = useState(null);
+  const [editTenant, setEditTenant]     = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [diag, setDiag]                 = useState(null);
   const [diagLoading, setDiagLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -67,6 +68,17 @@ export default function SuperAdminDashboardPage() {
     toast.success('Tenant updated');
     setEditTenant(null);
     load();
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await api.delete(`/super-admin/tenants/${deleteTarget.id}`);
+      toast.success(`Tenant "${deleteTarget.name}" and all its data permanently deleted`);
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Delete failed');
+    }
   };
 
   if (!stats) return <Box sx={{ p: 4 }}>Loading...</Box>;
@@ -275,12 +287,45 @@ export default function SuperAdminDashboardPage() {
                   ) : (
                     <IconButton size="small" title="Suspend" color="error" onClick={() => suspend(t.id)}><PauseCircle fontSize="small" /></IconButton>
                   )}
+                  <Tooltip title="Delete tenant & all data (irreversible)">
+                    <IconButton size="small" color="error" onClick={() => setDeleteTarget(t)}><Delete fontSize="small" /></IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Paper>
+
+      {/* ── Delete confirmation dialog ───────────────────────────────── */}
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ color: '#C0392B', fontWeight: 700 }}>Delete Tenant</DialogTitle>
+        <DialogContent>
+          {deleteTarget && (
+            <Stack spacing={1.5}>
+              <Alert severity="error">
+                This action is <strong>permanent and cannot be undone</strong>.
+              </Alert>
+              <Typography variant="body2">
+                You are about to permanently delete:
+              </Typography>
+              <Box sx={{ bgcolor: '#FFF4F4', border: '1px solid #FFCDD2', borderRadius: 1, p: 1.5 }}>
+                <Typography fontWeight={700}>{deleteTarget.name}</Typography>
+                <Typography variant="caption" color="text.secondary">{deleteTarget.slug}</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                All users, bookings, packages, hotels, payments, vouchers, and CRM data for this tenant will be permanently deleted.
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button variant="contained" color="error" startIcon={<Delete />} onClick={confirmDelete}>
+            Delete Permanently
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!editTenant} onClose={() => setEditTenant(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Edit Tenant</DialogTitle>
