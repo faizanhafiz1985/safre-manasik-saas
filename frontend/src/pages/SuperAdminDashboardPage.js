@@ -1,3 +1,4 @@
+// v2 — includes tenant delete
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Paper, Typography, Grid, Card, CardContent, Table, TableHead,
