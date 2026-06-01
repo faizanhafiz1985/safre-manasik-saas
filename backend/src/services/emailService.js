@@ -22,38 +22,80 @@ const nodemailer = (() => {
 
 const logger = require('../config/logger');
 
-const CONFIGURED = !!process.env.SMTP_HOST;
+// Resend HTTP API key. We prefer the HTTP API over SMTP because SMTP
+// connections to Resend can hang indefinitely (no fast failure), which silently
+// blocks email delivery. The same `re_...` key works as the API bearer token.
+const RESEND_API_KEY = process.env.RESEND_API_KEY
+  || (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('re_') ? process.env.SMTP_PASS : null);
+
+const CONFIGURED = !!process.env.SMTP_HOST || !!RESEND_API_KEY;
 let transporter = null;
 
-if (CONFIGURED && nodemailer) {
+if (process.env.SMTP_HOST && nodemailer) {
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
     secure: process.env.SMTP_SECURE === 'true',
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    // Hard timeouts so a stuck SMTP connection fails fast instead of hanging.
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 
-const DEFAULT_FROM = process.env.SMTP_FROM || '"Safre Manasik" <noreply@safremanasik.com>';
+const DEFAULT_FROM = process.env.SMTP_FROM || 'Safre Manasik <noreply@safremanasik.com>';
 
 /**
  * Send a transactional email. Always resolves — never throws — so calling code
  * doesn't need to wrap in try/catch.
  *
- * @param {Object} opts
- * @param {string|string[]} opts.to       — recipient(s)
- * @param {string} opts.subject
- * @param {string} opts.html              — HTML body
- * @param {string} [opts.text]            — text body (auto-derived from html if missing)
- * @returns {Promise<{ok: boolean, mode: 'sent'|'logged', error?: string}>}
+ * Strategy: use Resend's HTTP API when an API key is available (reliable, fast,
+ * returns clear errors). Otherwise fall back to SMTP. If neither is configured,
+ * the message is logged only.
+ *
+ * @returns {Promise<{ok: boolean, mode: 'sent'|'logged', error?: string, id?: string}>}
  */
 async function sendEmail({ to, subject, html, text }) {
   const fallbackText = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+  const recipients = Array.isArray(to) ? to : [to];
 
-  if (!CONFIGURED || !transporter) {
+  // ── Preferred path: Resend HTTP API ──────────────────────────────────────
+  if (RESEND_API_KEY && typeof fetch === 'function') {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from: DEFAULT_FROM, to: recipients, subject, html, text: fallbackText }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        logger.info(`[email:sent] resend id=${data.id} to=${JSON.stringify(to)} subject="${subject}"`);
+        return { ok: true, mode: 'sent', id: data.id };
+      }
+      const errMsg = data.message || data.name || `Resend HTTP ${resp.status}`;
+      logger.error(`[email:error] Resend API to=${JSON.stringify(to)} subject="${subject}" — ${errMsg}`);
+      return { ok: false, mode: 'sent', error: errMsg };
+    } catch (err) {
+      clearTimeout(timer);
+      const msg = err.name === 'AbortError' ? 'Resend API timed out after 15s' : err.message;
+      logger.error(`[email:error] Resend API to=${JSON.stringify(to)} subject="${subject}" — ${msg}`);
+      return { ok: false, mode: 'sent', error: msg };
+    }
+  }
+
+  // ── Fallback path: SMTP ───────────────────────────────────────────────────
+  if (!transporter) {
     logger.info(
       `[email:LOGGED] to=${JSON.stringify(to)} subject="${subject}"\n` +
-      `(SMTP not configured. Set SMTP_HOST/SMTP_USER/SMTP_PASS env vars to actually send.)\n` +
+      `(No email transport configured. Set RESEND_API_KEY or SMTP_* env vars to actually send.)\n` +
       `--- body ---\n${fallbackText}\n--- end ---`
     );
     return { ok: true, mode: 'logged' };
@@ -70,7 +112,7 @@ async function sendEmail({ to, subject, html, text }) {
     logger.info(`[email:sent] messageId=${info.messageId} to=${JSON.stringify(to)} subject="${subject}"`);
     return { ok: true, mode: 'sent' };
   } catch (err) {
-    logger.error(`[email:error] to=${JSON.stringify(to)} subject="${subject}" — ${err.message}`);
+    logger.error(`[email:error] SMTP to=${JSON.stringify(to)} subject="${subject}" — ${err.message}`);
     return { ok: false, mode: 'sent', error: err.message };
   }
 }
