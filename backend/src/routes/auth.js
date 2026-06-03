@@ -6,15 +6,18 @@ const { authenticate } = require('../middleware/auth');
 const { tenantScope } = require('../middleware/tenant');
 const validate = require('../middleware/validate');
 
-// ── Rate limiter: 3 attempts per IP per 15 minutes for sensitive recovery endpoints
+// ── Rate limiter for sensitive recovery endpoints.
+// 10 attempts per IP per 15 minutes. The previous limit of 3 was too strict —
+// a user who mistypes their email or retries a couple of times got locked out
+// for 15 minutes, which looked like the feature was broken. 10/15min still
+// blocks bulk abuse / email-bombing while allowing normal retries. Offices
+// behind a single NAT IP also need the higher ceiling.
 const recoveryLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 3,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts. Please wait 15 minutes before trying again.' },
-  // Skip successful requests — only count failed or all attempts depending on strictness.
-  // Here we count all attempts (most secure for auth flows).
   skipSuccessfulRequests: false,
 });
 
