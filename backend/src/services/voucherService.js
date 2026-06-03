@@ -530,4 +530,4 @@ const getReceiptHtml = async (payment, booking, receiptNo, tenant = {}) => {
 </html>`;
 };
 
-module.exports = { getVoucherHtml, getReceiptHtml };
+module.exports = { getVoucherHtml, getReceiptHtml, generateZatcaQrDataUrl };

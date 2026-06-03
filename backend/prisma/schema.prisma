@@ -217,6 +217,7 @@ model Tenant {
   // ── Customer registry (B2C / B2B with child passengers) ──────────────────
   customers          Customer[]
   customerPassengers CustomerPassenger[]
+  formVouchers       FormVoucher[]
 
   @@index([slug])
   @@index([status])
@@ -317,6 +318,59 @@ model CustomerPassenger {
   @@map("customer_passengers")
 }
 
+// ─── Form Voucher (standalone hotel / transport vouchers) ─────────────────────
+// Distinct from booking-based Voucher. Created via the voucher form, supports a
+// Tentative→Confirmed lifecycle with an HCN reference, and its own SAF-prefixed
+// voucher number sequence (per tenant, per month).
+
+model FormVoucher {
+  id        String @id @default(uuid())
+  tenantId  String
+  voucherNo String
+  type      String // 'HOTEL' | 'TRANSPORT'
+  status    String @default("TENTATIVE") // 'TENTATIVE' | 'CONFIRMED'
+  hcn       String? // Hotel Confirmation Number — set on confirm
+
+  // Common party fields
+  companyName String?
+  firstName   String
+  lastName    String
+  mobile      String
+  whatsapp    String?
+  passport    String
+
+  // Hotel-specific
+  hotelId       String?
+  hotelName     String?
+  checkInDate   DateTime?
+  checkOutDate  DateTime?
+  perNightPrice Decimal?  @db.Decimal(10, 2)
+
+  // Transport-specific
+  vehicleType     String?
+  pickupLocation  String?
+  dropoffLocation String?
+  travelDate      DateTime?
+  passengerCount  Int?
+  transportPrice  Decimal?  @db.Decimal(10, 2)
+
+  // Totals + audit trail (user ids — no FK to avoid back-relation churn on User)
+  totalValue    Decimal?  @db.Decimal(12, 2)
+  createdById   String?
+  confirmedById String?
+  modifiedById  String?
+  confirmedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, voucherNo])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("form_vouchers")
+}
+
 // ─── Hotel ──────────────────────────────────────────────────────────────────
 
 model Hotel {
@@ -329,6 +383,7 @@ model Hotel {
   description String?
   amenities   String[]
   distanceToHaramMeters Int?
+  pricePerNight Decimal? @db.Decimal(10, 2) // selling price/night — used by the voucher form
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
 

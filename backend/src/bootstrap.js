@@ -141,6 +141,56 @@ async function ensureCustomerTables() {
   }
 }
 
+async function ensureVoucherFormTables() {
+  try {
+    // Add the selling-price column to the existing hotels table (idempotent).
+    // We use ALTER ... ADD COLUMN IF NOT EXISTS instead of a Prisma migration so
+    // the live DB stays in sync without running `prisma db push` on deploy.
+    await prisma.$executeRawUnsafe(`ALTER TABLE hotels ADD COLUMN IF NOT EXISTS "pricePerNight" DECIMAL(10,2)`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS form_vouchers (
+        id                VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"        VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "voucherNo"       VARCHAR(32)  NOT NULL,
+        type              VARCHAR(12)  NOT NULL,
+        status            VARCHAR(12)  NOT NULL DEFAULT 'TENTATIVE',
+        hcn               VARCHAR(64),
+        "companyName"     TEXT,
+        "firstName"       TEXT         NOT NULL,
+        "lastName"        TEXT         NOT NULL,
+        mobile            VARCHAR(20)  NOT NULL,
+        whatsapp          VARCHAR(20),
+        passport          TEXT         NOT NULL,
+        "hotelId"         VARCHAR(36),
+        "hotelName"       TEXT,
+        "checkInDate"     TIMESTAMPTZ,
+        "checkOutDate"    TIMESTAMPTZ,
+        "perNightPrice"   DECIMAL(10,2),
+        "vehicleType"     TEXT,
+        "pickupLocation"  TEXT,
+        "dropoffLocation" TEXT,
+        "travelDate"      TIMESTAMPTZ,
+        "passengerCount"  INTEGER,
+        "transportPrice"  DECIMAL(10,2),
+        "totalValue"      DECIMAL(12,2),
+        "createdById"     VARCHAR(36),
+        "confirmedById"   VARCHAR(36),
+        "modifiedById"    VARCHAR(36),
+        "confirmedAt"     TIMESTAMPTZ,
+        "createdAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        "updatedAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_form_voucher_no UNIQUE ("tenantId", "voucherNo")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fv_tenant ON form_vouchers("tenantId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fv_status ON form_vouchers("tenantId", status)`);
+    logger.info('[bootstrap] hotels.pricePerNight + form_vouchers table ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensureVoucherFormTables failed: ${err.message}`);
+  }
+}
+
 async function ensurePlanConfigs() {
   try {
     const existing = await prisma.$queryRawUnsafe(
@@ -250,6 +300,7 @@ async function runBootstrap() {
   await ensurePlanConfigs();
   await ensurePasswordResetTokensTable();
   await ensureCustomerTables();
+  await ensureVoucherFormTables();
   logger.info('[bootstrap] Startup tasks complete.');
 }
 
