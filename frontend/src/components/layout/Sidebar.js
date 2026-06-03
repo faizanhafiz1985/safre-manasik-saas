@@ -5,7 +5,7 @@ import {
   Dashboard, CardTravel, BookOnline, DirectionsBus, Restaurant,
   Hotel, ConfirmationNumber, Payment, People, Settings, BarChart, EventNote,
   SupervisorAccount, Business, Campaign, Leaderboard, ViewKanban,
-  AssignmentTurnedIn, Inbox, Tune, AdminPanelSettings,
+  AssignmentTurnedIn, Inbox, Tune, AdminPanelSettings, Receipt,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import BrandLogo from '../BrandLogo';
@@ -27,6 +27,7 @@ const navItems = [
   { label: 'Packages',        icon: <CardTravel />,         path: '/packages',                  roles: ['ADMIN','AGENT','CUSTOMER'] },
   { label: 'Bookings',        icon: <BookOnline />,         path: '/bookings',                  roles: ['ADMIN','AGENT','CUSTOMER'] },
   { label: 'Vouchers',        icon: <ConfirmationNumber />, path: '/vouchers',                  roles: ['ADMIN','AGENT','CUSTOMER'] },
+  { label: 'Direct Vouchers', icon: <Receipt />,            path: '/voucher-forms',             roles: ['ADMIN','AGENT'] },
   { label: 'Transport',       icon: <DirectionsBus />,      path: '/transport',                 roles: ['ADMIN','AGENT'] },
   { label: 'Catering',        icon: <Restaurant />,         path: '/catering',                  roles: ['ADMIN','AGENT'] },
   { label: 'Hotels',          icon: <Hotel />,              path: '/hotels',                    roles: ['ADMIN','AGENT'] },

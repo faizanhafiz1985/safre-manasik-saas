@@ -19,6 +19,7 @@ import VouchersPage from './pages/VouchersPage';
 import PaymentsPage from './pages/PaymentsPage';
 import UsersPage from './pages/UsersPage';
 import CustomersPage from './pages/CustomersPage';
+import VoucherFormsPage from './pages/VoucherFormsPage';
 import AdminConfigPage from './pages/AdminConfigPage';
 import ProfilePage from './pages/ProfilePage';
 import DailySchedulePage from './pages/DailySchedulePage';
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="catering" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CateringPage /></PrivateRoute>} />
           <Route path="hotels" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><HotelsPage /></PrivateRoute>} />
           <Route path="vouchers" element={<VouchersPage />} />
+          <Route path="voucher-forms" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><VoucherFormsPage /></PrivateRoute>} />
           <Route path="payments" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><PaymentsPage /></PrivateRoute>} />
           <Route path="customers" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CustomersPage /></PrivateRoute>} />
           <Route path="users" element={<PrivateRoute roles={['ADMIN']}><UsersPage /></PrivateRoute>} />
