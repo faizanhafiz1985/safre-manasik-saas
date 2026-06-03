@@ -25,6 +25,7 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
+const customerRoutes = require('./routes/customers');
 const packageRoutes = require('./routes/packages');
 const bookingRoutes = require('./routes/bookings');
 const transportRoutes = require('./routes/transport');
@@ -97,6 +98,7 @@ app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/payments/gateway', paymentGatewayRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/transport', transportRoutes);

@@ -10,6 +10,8 @@ const prisma = new PrismaClient({
 // remember to pass it.
 const TENANT_MODELS = new Set([
   'User',
+  'Customer',
+  'CustomerPassenger',
   'Hotel',
   'Package',
   'Booking',

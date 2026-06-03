@@ -95,6 +95,52 @@ async function ensurePasswordResetTokensTable() {
   }
 }
 
+async function ensureCustomerTables() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id                VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"        VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        type              VARCHAR(8)   NOT NULL DEFAULT 'B2C',
+        "firstName"       TEXT         NOT NULL,
+        "lastName"        TEXT         NOT NULL,
+        mobile            VARCHAR(20)  NOT NULL,
+        whatsapp          VARCHAR(20)  NOT NULL,
+        passport          TEXT,
+        email             TEXT,
+        gender            VARCHAR(10),
+        "companyName"     TEXT,
+        "crNumber"        VARCHAR(10),
+        "nationalAddress" TEXT,
+        "createdAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        "updatedAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_customers_tenant ON customers("tenantId")`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS customer_passengers (
+        id           VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"   VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "customerId" VARCHAR(36)  NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+        "firstName"  TEXT         NOT NULL,
+        "lastName"   TEXT         NOT NULL,
+        mobile       VARCHAR(20),
+        whatsapp     VARCHAR(20),
+        passport     TEXT,
+        email        TEXT,
+        gender       VARCHAR(10),
+        "createdAt"  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cust_pax_tenant   ON customer_passengers("tenantId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cust_pax_customer ON customer_passengers("customerId")`);
+    logger.info('[bootstrap] customers + customer_passengers tables ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensureCustomerTables failed: ${err.message}`);
+  }
+}
+
 async function ensurePlanConfigs() {
   try {
     const existing = await prisma.$queryRawUnsafe(
@@ -203,6 +249,7 @@ async function runBootstrap() {
   await ensureSuperAdmin();
   await ensurePlanConfigs();
   await ensurePasswordResetTokensTable();
+  await ensureCustomerTables();
   logger.info('[bootstrap] Startup tasks complete.');
 }
 
