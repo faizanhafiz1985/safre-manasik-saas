@@ -17,7 +17,7 @@ const { getTenantQuota } = require('./quota');
 
 const requireCrm = async (req, res, next) => {
   try {
-    if (req.user?.role === 'SUPER_ADMIN') return next();
+    if (req.user?.role === 'SUPER_ADMIN' || req.user?.isImpersonator) return next();
 
     const tenantId = req.user?.tenantId;
     if (!tenantId) return res.status(403).json({ error: 'No tenant associated' });

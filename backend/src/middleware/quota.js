@@ -78,8 +78,8 @@ async function getTenantQuota(tenantId) {
 //   resource: 'users' | 'bookings' (extensible — add new resource keys here)
 const checkQuota = (resource) => async (req, res, next) => {
   try {
-    // SUPER_ADMIN is platform-wide and has no tenant — never blocked
-    if (req.user?.role === 'SUPER_ADMIN') return next();
+    // SUPER_ADMIN (and proxy-login sessions) are never quota-limited
+    if (req.user?.role === 'SUPER_ADMIN' || req.user?.isImpersonator) return next();
     const tenantId = req.user?.tenantId;
     if (!tenantId) return res.status(403).json({ error: 'No tenant associated' });
 
@@ -130,7 +130,7 @@ const checkQuota = (resource) => async (req, res, next) => {
 //   featureKey: e.g. 'pdfVouchers', 'reports', 'apiAccess', 'customBranding'
 const requireFeature = (featureKey) => async (req, res, next) => {
   try {
-    if (req.user?.role === 'SUPER_ADMIN') return next();
+    if (req.user?.role === 'SUPER_ADMIN' || req.user?.isImpersonator) return next();
     const tenantId = req.user?.tenantId;
     if (!tenantId) return res.status(403).json({ error: 'No tenant associated' });
 

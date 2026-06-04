@@ -47,6 +47,9 @@ function intersectWithPlan(permSet, planFeatures) {
 async function getEffectivePermissions(user) {
   if (!user) return new Set();
   if (user.role === 'SUPER_ADMIN') return new Set(ALL_PERMISSIONS);
+  // Proxy login grants full access (every tab/action) within the target tenant,
+  // bypassing custom-role limits and the plan ceiling.
+  if (user.isImpersonator) return new Set(ALL_PERMISSIONS);
 
   let base;
   if (user.customRoleId) {

@@ -44,6 +44,14 @@ const authenticate = async (req, res, next) => {
       return res.status(403).json({ error: 'Tenant suspended. Contact support.' });
     }
     req.user = user;
+    // Proxy login: tokens minted by the SUPER_ADMIN-only impersonate endpoint
+    // carry an `impersonatedBy` claim. Such a session acts as the tenant ADMIN
+    // (so data stays scoped to that tenant) but is granted full access to every
+    // tab/feature/quota — gates check req.user.isImpersonator to bypass.
+    if (decoded.impersonatedBy) {
+      req.user.isImpersonator = true;
+      req.user.impersonatedBy = decoded.impersonatedBy;
+    }
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
