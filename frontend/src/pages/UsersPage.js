@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Box, Typography, Button, Card, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Chip, TextField, InputAdornment, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Grid, TablePagination, Divider } from '@mui/material';
-import { Add, Search, Edit, Business, Person } from '@mui/icons-material';
+import { Box, Typography, Button, Card, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Chip, TextField, InputAdornment, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Grid, TablePagination, Divider, FormControl, Select } from '@mui/material';
+import { Add, Search, Edit, Business, Person, Security } from '@mui/icons-material';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import { useForm, useWatch } from 'react-hook-form';
@@ -18,6 +18,13 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [customRoles, setCustomRoles] = useState([]);
+
+  // Custom roles (RBAC) for the assignment dropdowns. ADMIN-only page, so the
+  // /rbac/roles call is permitted; fail silently for safety.
+  useEffect(() => {
+    api.get('/rbac/roles').then((r) => setCustomRoles(r.data || [])).catch(() => setCustomRoles([]));
+  }, []);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
   const watchedRole = useWatch({ control, name: 'role', defaultValue: 'CUSTOMER' });
@@ -39,13 +46,31 @@ export default function UsersPage() {
 
   const onSubmit = async (data) => {
     try {
-      if (editing) await api.put(`/users/${editing.id}`, data);
-      else await api.post('/users', data);
+      let userId;
+      if (editing) { await api.put(`/users/${editing.id}`, data); userId = editing.id; }
+      else { const r = await api.post('/users', data); userId = r.data.id; }
+      // Assign / change the custom role if the selection differs.
+      const desired = data.customRoleId || '';
+      const current = editing?.customRoleId || '';
+      if (userId && desired !== current) {
+        await api.put(`/rbac/users/${userId}/role`, { customRoleId: desired || null });
+      }
       toast.success(editing ? 'User updated' : 'User created');
       setOpen(false);
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save user');
+    }
+  };
+
+  // Inline (table) role assignment — assign directly from the Users list.
+  const assignRole = async (userId, customRoleId) => {
+    try {
+      await api.put(`/rbac/users/${userId}/role`, { customRoleId: customRoleId || null });
+      toast.success('Role assigned');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to assign role');
     }
   };
 
@@ -85,8 +110,8 @@ export default function UsersPage() {
                   <TableCell>Name</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Role</TableCell>
+                  <TableCell>Assigned Role</TableCell>
                   <TableCell>Type</TableCell>
-                  <TableCell>Company / CR#</TableCell>
                   <TableCell>Phone</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Joined</TableCell>
@@ -100,15 +125,21 @@ export default function UsersPage() {
                     <TableCell>{u.email}</TableCell>
                     <TableCell><Chip label={u.role} color={roleColor[u.role]} size="small" /></TableCell>
                     <TableCell>
+                      {u.role === 'SUPER_ADMIN' ? '—' : (
+                        <FormControl size="small" sx={{ minWidth: 150 }}>
+                          <Select value={u.customRoleId || ''} displayEmpty onChange={(e) => assignRole(u.id, e.target.value)}>
+                            <MenuItem value=""><em>Default (built-in)</em></MenuItem>
+                            {customRoles.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+                          </Select>
+                        </FormControl>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {u.role === 'CUSTOMER'
                         ? <Chip icon={u.customerType === 'B2B' ? <Business fontSize="small" /> : <Person fontSize="small" />}
                             label={u.customerType || 'B2C'} size="small"
                             color={u.customerType === 'B2B' ? 'warning' : 'default'} />
                         : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {u.companyName || '-'}
-                      {u.crNumber && <Typography variant="caption" display="block" color="text.secondary">CR: {u.crNumber}</Typography>}
                     </TableCell>
                     <TableCell>{u.phone || '-'}</TableCell>
                     <TableCell><Chip label={u.isActive ? 'Active' : 'Inactive'} color={u.isActive ? 'success' : 'error'} size="small" /></TableCell>
@@ -145,6 +176,16 @@ export default function UsersPage() {
                 </TextField>
               </Grid>
               <Grid item xs={6}><TextField fullWidth label="Phone" error={!!errors.phone} helperText={errors.phone?.message} {...register('phone', { pattern: { value: PATTERNS.PHONE, message: MESSAGES.PHONE } })} /></Grid>
+
+              {/* RBAC custom-role assignment */}
+              <Grid item xs={12}>
+                <TextField fullWidth select label="Custom Role (optional)" defaultValue="" {...register('customRoleId')}
+                  helperText="Overrides the built-in role's tab access. “Default” keeps the built-in role."
+                  InputProps={{ startAdornment: <InputAdornment position="start"><Security fontSize="small" sx={{ color: '#C9A227' }} /></InputAdornment> }}>
+                  <MenuItem value=""><em>Default (built-in role)</em></MenuItem>
+                  {customRoles.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+                </TextField>
+              </Grid>
 
               {/* Customer Type — only shown for CUSTOMER role */}
               {watchedRole === 'CUSTOMER' && (

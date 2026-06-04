@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Box, Drawer, AppBar, Toolbar, IconButton, Typography, Avatar, Menu, MenuItem, useMediaQuery, useTheme, Divider, Chip } from '@mui/material';
 import { Menu as MenuIcon, Logout, Settings, Person } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
@@ -9,6 +9,19 @@ import BrandLogo from '../BrandLogo';
 
 const DRAWER_WIDTH = 260;
 
+// Maps a route path to its RBAC feature key. Used to block direct-URL access to
+// tabs the user's role does not permit (defense in depth beyond hiding them in
+// the sidebar). Exact-match on the tab root; detail pages inherit via the API.
+const PATH_FEATURE = {
+  '/packages': 'packages', '/bookings': 'bookings', '/vouchers': 'vouchers',
+  '/voucher-forms': 'voucher_forms', '/transport': 'transport', '/catering': 'catering',
+  '/hotels': 'hotels', '/payments': 'payments', '/customers': 'customers', '/users': 'users',
+  '/roles': 'roles', '/reports/daily-schedule': 'daily_schedule', '/reports/transport': 'transport_report',
+  '/crm': 'crm_overview', '/crm/leads': 'crm_leads', '/crm/pipeline': 'crm_pipeline',
+  '/crm/tasks': 'crm_tasks', '/crm/inbox': 'crm_inbox', '/crm/reports': 'crm_reports',
+  '/crm/settings': 'crm_settings', '/tenant-settings': 'tenant_settings', '/config': 'system_config',
+};
+
 export default function Layout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -16,8 +29,17 @@ export default function Layout() {
   const [anchorEl, setAnchorEl] = useState(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => { logout(); toast.info('Logged out'); navigate('/login'); };
+
+  // RBAC route guard: if the server resolved a permission set and the current
+  // tab maps to a feature the user lacks `:view` for, bounce to the dashboard.
+  // Falls back to no-op when permissions are absent (legacy sessions) so nothing
+  // breaks. SUPER_ADMIN always has all permissions, so is never affected.
+  const perms = user?.permissions;
+  const feature = PATH_FEATURE[location.pathname];
+  const blocked = feature && Array.isArray(perms) && perms.length > 0 && !perms.includes(`${feature}:view`);
 
   const roleColor = { ADMIN: '#C9A227', AGENT: '#4A90D9', CUSTOMER: '#2E9E6B' }[user?.role] || '#64748b';
   const roleLabel = { ADMIN: 'Administrator', AGENT: 'Travel Agent', CUSTOMER: 'Pilgrim' }[user?.role];
@@ -101,7 +123,7 @@ export default function Layout() {
       )}
 
       <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 8, minHeight: '100vh', bgcolor: '#F7F2E8' }}>
-        <Outlet />
+        {blocked ? <Navigate to="/dashboard" replace /> : <Outlet />}
       </Box>
     </Box>
   );
