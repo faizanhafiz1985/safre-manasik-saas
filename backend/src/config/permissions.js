@@ -64,17 +64,27 @@ const DEFAULT_PERMISSIONS = {
     ['bookings', ['create', 'edit']],
     ['customers', ['create', 'edit']],
     ['voucher_forms', ['create', 'edit']],
+    ['vouchers', ['create']],          // POST /vouchers/generate (plan-gated)
     ['payments', ['create']],
+    ['daily_schedule', ['export']],    // CSV export routes
+    ['transport_report', ['export']],
     ['crm_leads', ['create', 'edit']],
     ['crm_tasks', ['create', 'edit']],
     ['crm_pipeline', ['create', 'edit']],
     ['crm_inbox', ['create', 'edit']],
   ]),
+  // Customers can READ these modules today (GET routes are open to any
+  // authenticated tenant user), so the defaults grant view to avoid any
+  // regression. Admins can tighten this with a custom role.
   CUSTOMER: perms([
     ['dashboard', ['view']],
     ['packages', ['view']],
     ['bookings', ['view']],
     ['vouchers', ['view']],
+    ['hotels', ['view']],
+    ['transport', ['view']],
+    ['catering', ['view']],
+    ['payments', ['view']],
   ]),
 };
 

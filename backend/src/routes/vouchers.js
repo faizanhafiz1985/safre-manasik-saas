@@ -45,8 +45,9 @@ const flexAuth = async (req, res, next) => {
 router.get('/preview/:bookingId', flexAuth, tenantScope, requireTenant, ctrl.previewVoucher);
 router.get('/download/:id', flexAuth, tenantScope, requireTenant, requireFeature('pdfVouchers'), ctrl.downloadVoucher);
 
+const { requirePermission } = require('../middleware/permission');
 router.use(authenticate, tenantScope, requireTenant);
-router.get('/', ctrl.getVouchers);
-router.post('/generate', authorize('ADMIN', 'AGENT'), requireFeature('pdfVouchers'), ctrl.generateVoucher);
+router.get('/', requirePermission('vouchers', 'view'), ctrl.getVouchers);
+router.post('/generate', authorize('ADMIN', 'AGENT'), requirePermission('vouchers', 'create'), requireFeature('pdfVouchers'), ctrl.generateVoucher);
 
 module.exports = router;
