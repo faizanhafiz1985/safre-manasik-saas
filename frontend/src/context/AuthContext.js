@@ -25,8 +25,13 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
     localStorage.setItem('token', data.token);
-    setUser(data.user);
-    return data.user;
+    // The login response does not include RBAC `permissions`. Immediately fetch
+    // the full profile via /auth/me so the sidebar + route guard reflect the
+    // user's effective permissions right after login (not only after a refresh).
+    let full = data.user;
+    try { const me = await api.get('/auth/me'); full = me.data; } catch { /* fall back to login user */ }
+    setUser(full);
+    return full;
   };
 
   const logout = () => {
