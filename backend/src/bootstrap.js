@@ -185,8 +185,10 @@ async function ensureVoucherFormTables() {
     `);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fv_tenant ON form_vouchers("tenantId")`);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fv_status ON form_vouchers("tenantId", status)`);
-    // Multi-trip support: JSON array of hotel trips on a single voucher.
+    // Multi-trip support: JSON array of trips (hotel or transport) on a voucher.
     await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS trips JSONB`);
+    // VAT rate snapshot (from SystemConfig vat_percentage at issue time).
+    await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "vatRate" DECIMAL(5,4)`);
     logger.info('[bootstrap] hotels.pricePerNight + form_vouchers (+trips) table ready');
   } catch (err) {
     logger.error(`[bootstrap] ensureVoucherFormTables failed: ${err.message}`);

@@ -11,7 +11,9 @@ router.get('/', requirePermission('voucher_forms', 'view'), ctrl.list);
 router.get('/:id', requirePermission('voucher_forms', 'view'), ctrl.getOne);
 router.get('/:id/print', requirePermission('voucher_forms', 'view'), ctrl.printHtml);
 router.post('/', authorize('ADMIN', 'AGENT'), requirePermission('voucher_forms', 'create'), ctrl.create);
+router.put('/:id', authorize('ADMIN', 'AGENT'), requirePermission('voucher_forms', 'edit'), ctrl.update);
 router.patch('/:id/confirm', authorize('ADMIN', 'AGENT'), requirePermission('voucher_forms', 'edit'), ctrl.confirm);
+router.patch('/:id/cancel', authorize('ADMIN', 'AGENT'), requirePermission('voucher_forms', 'edit'), ctrl.cancel);
 router.delete('/:id', authorize('ADMIN'), requirePermission('voucher_forms', 'delete'), ctrl.remove);
 
 module.exports = router;

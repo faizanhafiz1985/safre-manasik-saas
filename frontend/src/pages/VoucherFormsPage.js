@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
   Add, Search, Receipt, Delete, CheckCircle, Hotel as HotelIcon, DirectionsBus,
-  RestartAlt, Print,
+  RestartAlt, Edit, Block,
 } from '@mui/icons-material';
 import api from '../services/api';
 import { toast } from 'react-toastify';
@@ -18,22 +18,20 @@ const SAR = (n) => `SAR ${Number(n || 0).toLocaleString('en-US', { minimumFracti
 const D12 = /^\d{12}$/;
 const ALPHANUM = /^[A-Za-z0-9]+$/;
 const VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
+const STATUS_COLOR = { TENTATIVE: 'warning', CONFIRMED: 'success', CANCELLED: 'default' };
 
-const EMPTY_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', perNightPrice: '' };
-const EMPTY = {
-  type: 'HOTEL',
-  companyName: '', firstName: '', lastName: '', mobile: '', whatsapp: '', passport: '',
-  trips: [{ ...EMPTY_TRIP }],
-  vehicleType: '', pickupLocation: '', dropoffLocation: '', travelDate: '', passengerCount: '', transportPrice: '',
-};
+const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', perNightPrice: '' };
+const EMPTY_TRANSPORT_TRIP = { vehicleType: '', pickupLocation: '', dropoffLocation: '', travelDate: '', passengerCount: '', price: '' };
+const emptyTrip = (type) => (type === 'HOTEL' ? { ...EMPTY_HOTEL_TRIP } : { ...EMPTY_TRANSPORT_TRIP });
+const EMPTY = { type: 'HOTEL', companyName: '', firstName: '', lastName: '', mobile: '', whatsapp: '', passport: '', trips: [{ ...EMPTY_HOTEL_TRIP }] };
 
-// nights between two yyyy-mm-dd strings (UTC, matches the backend)
 function nights(ci, co) {
   if (!ci || !co) return 0;
   const a = new Date(ci); const b = new Date(co);
   const d = Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
   return d > 0 ? d : 0;
 }
+const dateOnly = (d) => (d ? String(d).split('T')[0] : '');
 
 export default function VoucherFormsPage() {
   const [rows, setRows] = useState([]);
@@ -44,6 +42,7 @@ export default function VoucherFormsPage() {
   const [statusFilter, setStatusFilter] = useState('');
 
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [errs, setErrs] = useState({});
   const [voucherNo, setVoucherNo] = useState('—');
@@ -51,7 +50,7 @@ export default function VoucherFormsPage() {
   const [saving, setSaving] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
 
-  const [hcnDialog, setHcnDialog] = useState(null); // voucher being confirmed
+  const [hcnDialog, setHcnDialog] = useState(null);
   const [hcn, setHcn] = useState('');
 
   const load = useCallback(() => {
@@ -63,33 +62,47 @@ export default function VoucherFormsPage() {
   }, [page, search, statusFilter]);
   useEffect(() => { load(); }, [load]);
 
+  const isHotel = form.type === 'HOTEL';
+
+  const fetchHotels = () => api.get('/hotels').then((h) => setHotels(Array.isArray(h.data) ? h.data : (h.data.data || []))).catch(() => setHotels([]));
+
   const openNew = async () => {
-    setForm(EMPTY); setErrs({}); setVoucherNo('…'); setOpen(true);
+    setEditingId(null); setForm(EMPTY); setErrs({}); setVoucherNo('…'); setOpen(true);
     try {
-      const [n, h] = await Promise.all([
-        api.get('/voucher-forms/next-number'),
-        api.get('/hotels').catch(() => ({ data: [] })),
-      ]);
+      const n = await api.get('/voucher-forms/next-number');
       setVoucherNo(n.data.voucherNo);
-      setHotels(Array.isArray(h.data) ? h.data : (h.data.data || []));
     } catch { setVoucherNo('(auto)'); }
+    fetchHotels();
   };
 
-  const isHotel = form.type === 'HOTEL';
-  const tripTotal = (t) => nights(t.checkInDate, t.checkOutDate) * Number(t.perNightPrice || 0);
-  const liveTotal = isHotel ? (form.trips || []).reduce((s, t) => s + tripTotal(t), 0) : Number(form.transportPrice || 0);
+  const openEdit = async (v) => {
+    setErrs({}); setOpen(true); setVoucherNo(v.voucherNo); setEditingId(v.id);
+    fetchHotels();
+    try {
+      const r = await api.get(`/voucher-forms/${v.id}`);
+      const d = r.data;
+      const trips = Array.isArray(d.trips) && d.trips.length
+        ? d.trips.map((t) => d.type === 'HOTEL'
+          ? { hotelId: t.hotelId || '', hotelName: t.hotelName || '', checkInDate: dateOnly(t.checkInDate), checkOutDate: dateOnly(t.checkOutDate), perNightPrice: t.perNightPrice != null ? String(t.perNightPrice) : '' }
+          : { vehicleType: t.vehicleType || '', pickupLocation: t.pickupLocation || '', dropoffLocation: t.dropoffLocation || '', travelDate: dateOnly(t.travelDate), passengerCount: t.passengerCount != null ? String(t.passengerCount) : '', price: t.price != null ? String(t.price) : '' })
+        : [emptyTrip(d.type)];
+      setForm({
+        type: d.type, companyName: d.companyName || '', firstName: d.firstName || '', lastName: d.lastName || '',
+        mobile: d.mobile || '', whatsapp: d.whatsapp || '', passport: d.passport || '', trips,
+      });
+    } catch { toast.error('Failed to load voucher'); setOpen(false); }
+  };
+
+  const tripTotal = (t) => isHotel ? nights(t.checkInDate, t.checkOutDate) * Number(t.perNightPrice || 0) : Number(t.price || 0);
+  const liveTotal = (form.trips || []).reduce((s, t) => s + tripTotal(t), 0);
 
   const updateTrip = (idx, patch) => setForm((f) => ({ ...f, trips: f.trips.map((t, i) => i === idx ? { ...t, ...patch } : t) }));
-  const addTrip = () => setForm((f) => ({ ...f, trips: [...f.trips, { ...EMPTY_TRIP }] }));
+  const addTrip = () => setForm((f) => ({ ...f, trips: [...f.trips, emptyTrip(f.type)] }));
   const removeTrip = (idx) => setForm((f) => ({ ...f, trips: f.trips.length > 1 ? f.trips.filter((_, i) => i !== idx) : f.trips }));
 
   const onHotelSelect = (idx, hotelId) => {
     const h = hotels.find((x) => x.id === hotelId);
-    updateTrip(idx, {
-      hotelId,
-      hotelName: h?.name || '',
-      perNightPrice: h?.pricePerNight != null ? String(h.pricePerNight) : form.trips[idx].perNightPrice,
-    });
+    updateTrip(idx, { hotelId, hotelName: h?.name || '', perNightPrice: h?.pricePerNight != null ? String(h.pricePerNight) : form.trips[idx].perNightPrice });
   };
 
   function validate() {
@@ -100,24 +113,24 @@ export default function VoucherFormsPage() {
     if (!D12.test((form.mobile || '').replace(/\s/g, ''))) e.mobile = 'Exactly 12 digits';
     if (form.whatsapp && !D12.test((form.whatsapp || '').replace(/\s/g, ''))) e.whatsapp = 'Exactly 12 digits';
     if (!form.passport || !ALPHANUM.test(form.passport.trim())) e.passport = 'Alphanumeric, required';
-    if (isHotel) {
-      e.trips = (form.trips || []).map((t) => {
-        const te = {};
+    e.trips = (form.trips || []).map((t) => {
+      const te = {};
+      if (isHotel) {
         if (!t.hotelName) te.hotelName = 'Select a hotel';
         if (!t.checkInDate) te.checkInDate = 'Required';
         if (!t.checkOutDate) te.checkOutDate = 'Required';
         if (t.checkInDate && t.checkOutDate && nights(t.checkInDate, t.checkOutDate) <= 0) te.checkOutDate = 'After check-in';
         if (t.perNightPrice === '' || isNaN(Number(t.perNightPrice))) te.perNightPrice = 'Required';
-        return te;
-      });
-      if (e.trips.every((te) => Object.keys(te).length === 0)) delete e.trips;
-    } else {
-      if (!form.vehicleType) e.vehicleType = 'Required';
-      if (!form.pickupLocation) e.pickupLocation = 'Required';
-      if (!form.dropoffLocation) e.dropoffLocation = 'Required';
-      if (!form.travelDate) e.travelDate = 'Required';
-      if (form.transportPrice === '' || isNaN(Number(form.transportPrice))) e.transportPrice = 'Required numeric';
-    }
+      } else {
+        if (!t.vehicleType) te.vehicleType = 'Required';
+        if (!t.pickupLocation) te.pickupLocation = 'Required';
+        if (!t.dropoffLocation) te.dropoffLocation = 'Required';
+        if (!t.travelDate) te.travelDate = 'Required';
+        if (t.price === '' || isNaN(Number(t.price))) te.price = 'Required';
+      }
+      return te;
+    });
+    if (e.trips.every((te) => Object.keys(te).length === 0)) delete e.trips;
     setErrs(e);
     return Object.keys(e).length === 0;
   }
@@ -125,16 +138,21 @@ export default function VoucherFormsPage() {
   const doSubmit = async () => {
     setSaving(true);
     try {
-      await api.post('/voucher-forms', form);
-      toast.success('Voucher created (Tentative)');
+      if (editingId) {
+        await api.put(`/voucher-forms/${editingId}`, form);
+        toast.success('Voucher updated');
+      } else {
+        await api.post('/voucher-forms', form);
+        toast.success('Voucher created (Tentative)');
+      }
       setConfirmSubmit(false); setOpen(false); load();
     } catch (e) {
-      toast.error(e.response?.data?.error || 'Failed to create voucher');
+      toast.error(e.response?.data?.error || 'Failed to save voucher');
     } finally { setSaving(false); }
   };
 
   const handleReset = () => {
-    if (window.confirm('Reset the form? All entered data will be cleared.')) { setForm({ ...EMPTY, type: form.type }); setErrs({}); }
+    if (window.confirm('Reset the form? All entered data will be cleared.')) { setForm({ ...EMPTY, type: form.type, trips: [emptyTrip(form.type)] }); setErrs({}); }
   };
 
   const confirmVoucher = async () => {
@@ -144,6 +162,12 @@ export default function VoucherFormsPage() {
       toast.success('Voucher confirmed');
       setHcnDialog(null); setHcn(''); load();
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to confirm'); }
+  };
+
+  const cancelVoucher = async (v) => {
+    if (!window.confirm(`Cancel voucher ${v.voucherNo}? This cannot be undone.`)) return;
+    try { await api.patch(`/voucher-forms/${v.id}/cancel`); toast.success('Voucher cancelled'); load(); }
+    catch (e) { toast.error(e.response?.data?.error || 'Failed to cancel'); }
   };
 
   const printVoucher = async (v) => {
@@ -179,6 +203,7 @@ export default function VoucherFormsPage() {
           <MenuItem value="">All</MenuItem>
           <MenuItem value="TENTATIVE">Tentative</MenuItem>
           <MenuItem value="CONFIRMED">Confirmed</MenuItem>
+          <MenuItem value="CANCELLED">Cancelled</MenuItem>
         </TextField>
       </Box>
 
@@ -194,18 +219,24 @@ export default function VoucherFormsPage() {
                 </TableRow></TableHead>
                 <TableBody>
                   {rows.map((v) => (
-                    <TableRow key={v.id} hover>
+                    <TableRow key={v.id} hover sx={{ opacity: v.status === 'CANCELLED' ? 0.6 : 1 }}>
                       <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{v.voucherNo}</TableCell>
                       <TableCell><Chip size="small" icon={v.type === 'HOTEL' ? <HotelIcon fontSize="small" /> : <DirectionsBus fontSize="small" />} label={v.type} /></TableCell>
                       <TableCell>{v.firstName} {v.lastName}</TableCell>
-                      <TableCell><Chip size="small" label={v.status} color={v.status === 'CONFIRMED' ? 'success' : 'warning'} /></TableCell>
+                      <TableCell><Chip size="small" label={v.status} color={STATUS_COLOR[v.status] || 'default'} /></TableCell>
                       <TableCell>{v.hcn || '—'}</TableCell>
                       <TableCell align="right">{SAR(v.totalValue)}</TableCell>
                       <TableCell><Typography variant="caption">{fmtDate(v.createdAt)}</Typography></TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                           {v.status === 'TENTATIVE' && (
+                            <Tooltip title="Edit (tentative only)"><IconButton size="small" onClick={() => openEdit(v)}><Edit fontSize="small" /></IconButton></Tooltip>
+                          )}
+                          {v.status === 'TENTATIVE' && (
                             <Tooltip title="Convert to Confirmed"><IconButton size="small" color="success" onClick={() => { setHcnDialog(v); setHcn(''); }}><CheckCircle fontSize="small" /></IconButton></Tooltip>
+                          )}
+                          {v.status !== 'CANCELLED' && (
+                            <Tooltip title="Cancel voucher"><IconButton size="small" color="warning" onClick={() => cancelVoucher(v)}><Block fontSize="small" /></IconButton></Tooltip>
                           )}
                           <Tooltip title="Print"><IconButton size="small" color="primary" onClick={() => printVoucher(v)}><Receipt fontSize="small" /></IconButton></Tooltip>
                           <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => del(v)}><Delete fontSize="small" /></IconButton></Tooltip>
@@ -222,11 +253,10 @@ export default function VoucherFormsPage() {
         )}
       </Card>
 
-      {/* New Voucher dialog */}
+      {/* New / Edit Voucher dialog */}
       <Dialog open={open} onClose={() => !saving && setOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, color: '#1B4B35' }}>New Voucher</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700, color: '#1B4B35' }}>{editingId ? 'Edit Voucher' : 'New Voucher'}</DialogTitle>
         <DialogContent dividers>
-          {/* Prominent TENTATIVE banner + voucher number */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, p: 1.5, borderRadius: 2, bgcolor: '#FFF8E7', border: '1px solid #F0D9A8' }}>
             <Chip label="TENTATIVE" color="warning" sx={{ fontWeight: 800, letterSpacing: 1 }} />
             <Box sx={{ textAlign: 'right' }}>
@@ -235,13 +265,12 @@ export default function VoucherFormsPage() {
             </Box>
           </Box>
 
-          <ToggleButtonGroup exclusive size="small" color="primary" value={form.type}
-            onChange={(_, v) => v && setForm({ ...EMPTY, type: v })} sx={{ mb: 2 }}>
+          <ToggleButtonGroup exclusive size="small" color="primary" value={form.type} disabled={!!editingId}
+            onChange={(_, v) => v && setForm({ ...EMPTY, type: v, trips: [emptyTrip(v)] })} sx={{ mb: 2 }}>
             <ToggleButton value="HOTEL" sx={{ px: 3 }}><HotelIcon fontSize="small" sx={{ mr: 1 }} /> Hotel Voucher</ToggleButton>
             <ToggleButton value="TRANSPORT" sx={{ px: 3 }}><DirectionsBus fontSize="small" sx={{ mr: 1 }} /> Transport Voucher</ToggleButton>
           </ToggleButtonGroup>
 
-          {/* Common party fields */}
           <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: '#1B4B35' }}>Customer</Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Company Name (optional)" error={!!errs.companyName} helperText={errs.companyName}
@@ -260,26 +289,27 @@ export default function VoucherFormsPage() {
 
           <Divider sx={{ my: 2 }} />
 
-          {isHotel ? (
-            <>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1B4B35' }}>Trips ({form.trips.length})</Typography>
-                <Button size="small" startIcon={<Add />} variant="outlined" onClick={addTrip}>Add Trip</Button>
-              </Box>
-              {form.trips.map((t, i) => {
-                const te = errs.trips?.[i] || {};
-                return (
-                  <Card key={i} variant="outlined" sx={{ p: 2, mb: 1.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Chip size="small" label={`Trip ${i + 1}`} />
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Subtotal: {SAR(tripTotal(t))} ({nights(t.checkInDate, t.checkOutDate)} nights)
-                        </Typography>
-                        {form.trips.length > 1 && <IconButton size="small" color="error" onClick={() => removeTrip(i)}><Delete fontSize="small" /></IconButton>}
-                      </Box>
-                    </Box>
-                    <Grid container spacing={2}>
+          {/* Trips repeater (works for both Hotel and Transport) */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1B4B35' }}>{isHotel ? 'Hotel Trips' : 'Transport Trips'} ({form.trips.length})</Typography>
+            <Button size="small" startIcon={<Add />} variant="outlined" onClick={addTrip}>Add Trip</Button>
+          </Box>
+          {form.trips.map((t, i) => {
+            const te = errs.trips?.[i] || {};
+            return (
+              <Card key={i} variant="outlined" sx={{ p: 2, mb: 1.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Chip size="small" label={`Trip ${i + 1}`} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Subtotal: {SAR(tripTotal(t))}{isHotel ? ` (${nights(t.checkInDate, t.checkOutDate)} nights)` : ''}
+                    </Typography>
+                    {form.trips.length > 1 && <IconButton size="small" color="error" onClick={() => removeTrip(i)}><Delete fontSize="small" /></IconButton>}
+                  </Box>
+                </Box>
+                <Grid container spacing={2}>
+                  {isHotel ? (
+                    <>
                       <Grid item xs={12} sm={6}>
                         <FormControl fullWidth size="small" error={!!te.hotelName}>
                           <InputLabel>Hotel Name *</InputLabel>
@@ -294,49 +324,43 @@ export default function VoucherFormsPage() {
                         <TextField fullWidth size="small" label="Per Night Selling Price *" error={!!te.perNightPrice}
                           helperText={te.perNightPrice || (t.hotelId && !t.perNightPrice ? 'No preset price — enter manually' : 'Auto-filled from hotel')}
                           InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
-                          inputProps={{ onKeyDown: numericOnly }}
-                          value={t.perNightPrice} onChange={(e) => updateTrip(i, { perNightPrice: e.target.value })} />
+                          inputProps={{ onKeyDown: numericOnly }} value={t.perNightPrice} onChange={(e) => updateTrip(i, { perNightPrice: e.target.value })} />
                       </Grid>
                       <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-in Date *" InputLabelProps={{ shrink: true }}
                         error={!!te.checkInDate} helperText={te.checkInDate} value={t.checkInDate} onChange={(e) => updateTrip(i, { checkInDate: e.target.value })} /></Grid>
                       <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-out Date *" InputLabelProps={{ shrink: true }}
                         inputProps={{ min: t.checkInDate || undefined }}
                         error={!!te.checkOutDate} helperText={te.checkOutDate} value={t.checkOutDate} onChange={(e) => updateTrip(i, { checkOutDate: e.target.value })} /></Grid>
-                    </Grid>
-                  </Card>
-                );
-              })}
-            </>
-          ) : (
-            <>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: '#1B4B35' }}>Transport Details</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField select fullWidth size="small" label="Vehicle Type *" error={!!errs.vehicleType} helperText={errs.vehicleType}
-                    value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}>
-                    {VEHICLE_TYPES.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
-                  </TextField>
+                    </>
+                  ) : (
+                    <>
+                      <Grid item xs={12} sm={6}>
+                        <TextField select fullWidth size="small" label="Vehicle Type *" error={!!te.vehicleType} helperText={te.vehicleType}
+                          value={t.vehicleType} onChange={(e) => updateTrip(i, { vehicleType: e.target.value })}>
+                          {VEHICLE_TYPES.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
+                        </TextField>
+                      </Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Travel Date *" InputLabelProps={{ shrink: true }}
+                        error={!!te.travelDate} helperText={te.travelDate} value={t.travelDate} onChange={(e) => updateTrip(i, { travelDate: e.target.value })} /></Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Pickup Location *" error={!!te.pickupLocation} helperText={te.pickupLocation}
+                        value={t.pickupLocation} onChange={(e) => updateTrip(i, { pickupLocation: e.target.value })} /></Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Drop-off Location *" error={!!te.dropoffLocation} helperText={te.dropoffLocation}
+                        value={t.dropoffLocation} onChange={(e) => updateTrip(i, { dropoffLocation: e.target.value })} /></Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="No. of Passengers" type="number"
+                        inputProps={{ onKeyDown: numericOnly }} value={t.passengerCount} onChange={(e) => updateTrip(i, { passengerCount: e.target.value })} /></Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Trip Price *" error={!!te.price} helperText={te.price}
+                        InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
+                        inputProps={{ onKeyDown: numericOnly }} value={t.price} onChange={(e) => updateTrip(i, { price: e.target.value })} /></Grid>
+                    </>
+                  )}
                 </Grid>
-                <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Travel Date *" InputLabelProps={{ shrink: true }}
-                  error={!!errs.travelDate} helperText={errs.travelDate} value={form.travelDate} onChange={(e) => setForm({ ...form, travelDate: e.target.value })} /></Grid>
-                <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Pickup Location *" error={!!errs.pickupLocation} helperText={errs.pickupLocation}
-                  value={form.pickupLocation} onChange={(e) => setForm({ ...form, pickupLocation: e.target.value })} /></Grid>
-                <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Drop-off Location *" error={!!errs.dropoffLocation} helperText={errs.dropoffLocation}
-                  value={form.dropoffLocation} onChange={(e) => setForm({ ...form, dropoffLocation: e.target.value })} /></Grid>
-                <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="No. of Passengers" type="number"
-                  inputProps={{ onKeyDown: numericOnly }} value={form.passengerCount} onChange={(e) => setForm({ ...form, passengerCount: e.target.value })} /></Grid>
-                <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Total Price *" error={!!errs.transportPrice} helperText={errs.transportPrice}
-                  InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
-                  inputProps={{ onKeyDown: numericOnly }} value={form.transportPrice} onChange={(e) => setForm({ ...form, transportPrice: e.target.value })} /></Grid>
-              </Grid>
-            </>
-          )}
+              </Card>
+            );
+          })}
 
-          {/* Auto-calculated total */}
+          {/* Auto-calculated total (excl. VAT — VAT breakdown shown on the printed voucher) */}
           <Box sx={{ mt: 2, p: 1.5, borderRadius: 2, bgcolor: '#0D2B1A', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2">
-              Total Value {isHotel && `(${form.trips.length} trip${form.trips.length > 1 ? 's' : ''})`}
-            </Typography>
+            <Typography variant="body2">Total ({form.trips.length} trip{form.trips.length > 1 ? 's' : ''}, excl. VAT)</Typography>
             <Typography variant="h6" sx={{ color: '#C9A227', fontWeight: 800 }}>{SAR(liveTotal)}</Typography>
           </Box>
         </DialogContent>
@@ -344,20 +368,20 @@ export default function VoucherFormsPage() {
           <Button color="inherit" startIcon={<RestartAlt />} onClick={handleReset} disabled={saving}>Reset</Button>
           <Box>
             <Button onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-            <Button variant="contained" onClick={() => { if (validate()) setConfirmSubmit(true); }} disabled={saving}>Create Voucher</Button>
+            <Button variant="contained" onClick={() => { if (validate()) setConfirmSubmit(true); }} disabled={saving}>{editingId ? 'Update Voucher' : 'Create Voucher'}</Button>
           </Box>
         </DialogActions>
       </Dialog>
 
       {/* Confirmation-before-submit dialog */}
       <Dialog open={confirmSubmit} onClose={() => setConfirmSubmit(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Create this voucher?</DialogTitle>
+        <DialogTitle>{editingId ? 'Save changes?' : 'Create this voucher?'}</DialogTitle>
         <DialogContent>
-          <Typography variant="body2">Voucher <strong>{voucherNo}</strong> ({form.type}) for <strong>{form.firstName} {form.lastName}</strong> with total <strong>{SAR(liveTotal)}</strong> will be saved as <strong>Tentative</strong>.</Typography>
+          <Typography variant="body2">Voucher <strong>{voucherNo}</strong> ({form.type}) for <strong>{form.firstName} {form.lastName}</strong> with subtotal <strong>{SAR(liveTotal)}</strong> (VAT added on print).</Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmSubmit(false)} disabled={saving}>Back</Button>
-          <Button variant="contained" onClick={doSubmit} disabled={saving}>{saving ? <CircularProgress size={18} color="inherit" /> : 'Confirm & Create'}</Button>
+          <Button variant="contained" onClick={doSubmit} disabled={saving}>{saving ? <CircularProgress size={18} color="inherit" /> : (editingId ? 'Save' : 'Confirm & Create')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -366,8 +390,7 @@ export default function VoucherFormsPage() {
         <DialogTitle sx={{ fontWeight: 700, color: '#1B4B35' }}>Convert to Confirmed</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>Enter the Hotel Confirmation Number (HCN). Once confirmed, this voucher cannot revert to Tentative.</Alert>
-          <TextField autoFocus fullWidth size="small" label="HCN # *" value={hcn} onChange={(e) => setHcn(e.target.value)}
-            helperText="Alphanumeric" />
+          <TextField autoFocus fullWidth size="small" label="HCN # *" value={hcn} onChange={(e) => setHcn(e.target.value)} helperText="Alphanumeric" />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setHcnDialog(null)}>Cancel</Button>
