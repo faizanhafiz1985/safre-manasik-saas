@@ -9,10 +9,12 @@ import {
 import {
   Business, People, BookOnline, AttachMoney, PauseCircle, PlayCircle, Edit, Delete,
   BugReport, CheckCircle, Warning, Error as ErrorIcon, Refresh, OpenInNew,
-  Email, Payment, AdminPanelSettings, HealthAndSafety,
+  Email, Payment, AdminPanelSettings, HealthAndSafety, Login,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const statusColor = { ACTIVE: 'success', TRIAL: 'warning', SUSPENDED: 'error', CANCELLED: 'default' };
 const planColor   = { STARTER: 'info', GROWTH: 'primary', ENTERPRISE: 'secondary' };
@@ -24,6 +26,8 @@ const checkIcon = (status) => {
 };
 
 export default function SuperAdminDashboardPage() {
+  const navigate = useNavigate();
+  const { impersonate } = useAuth();
   const [stats, setStats]       = useState(null);
   const [tenants, setTenants]   = useState([]);
   const [editTenant, setEditTenant]     = useState(null);
@@ -55,6 +59,19 @@ export default function SuperAdminDashboardPage() {
     await api.post(`/super-admin/tenants/${id}/suspend`);
     toast.success('Tenant suspended');
     load();
+  };
+
+  // Proxy login — switch the super-admin session into a tenant as its admin.
+  const proxyLogin = async (t) => {
+    if (!window.confirm(`Log in to "${t.name}" as its administrator? You'll be able to see their data and create transactions on their behalf.`)) return;
+    try {
+      const r = await api.post(`/super-admin/tenants/${t.id}/impersonate`);
+      await impersonate(r.data.token);
+      toast.success(`Now viewing ${r.data.tenant.name}`);
+      navigate('/dashboard');
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Proxy login failed');
+    }
   };
   const activate = async (id) => {
     await api.post(`/super-admin/tenants/${id}/activate`);
@@ -282,6 +299,9 @@ export default function SuperAdminDashboardPage() {
                 <TableCell align="center">{t._count.packages}</TableCell>
                 <TableCell>{new Date(t.createdAt).toLocaleDateString()}</TableCell>
                 <TableCell align="right">
+                  {(t.status === 'ACTIVE' || t.status === 'TRIAL') && (
+                    <Tooltip title="Proxy login (act as this tenant's admin)"><IconButton size="small" color="secondary" onClick={() => proxyLogin(t)}><Login fontSize="small" /></IconButton></Tooltip>
+                  )}
                   <IconButton size="small" title="Edit" onClick={() => setEditTenant({ ...t })}><Edit fontSize="small" /></IconButton>
                   {t.status === 'SUSPENDED' ? (
                     <IconButton size="small" title="Activate" color="success" onClick={() => activate(t.id)}><PlayCircle fontSize="small" /></IconButton>

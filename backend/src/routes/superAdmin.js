@@ -10,6 +10,7 @@ router.get('/tenants/:id', ctrl.getTenant);
 router.put('/tenants/:id', ctrl.updateTenant);
 router.post('/tenants/:id/suspend', ctrl.suspendTenant);
 router.post('/tenants/:id/activate', ctrl.activateTenant);
+router.post('/tenants/:id/impersonate', ctrl.impersonate);
 router.delete('/tenants/:id', ctrl.deleteTenant);
 
 router.get('/stats', ctrl.platformStats);

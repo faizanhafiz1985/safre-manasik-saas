@@ -141,9 +141,26 @@ const update = async (req, res, next) => {
 
 const remove = async (req, res, next) => {
   try {
-    const result = await prisma.user.updateMany({ where: { id: req.params.id }, data: { isActive: false } });
-    if (result.count === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ message: 'User deactivated' });
+    if (req.params.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
+    const target = await prisma.user.findFirst({ where: { id: req.params.id }, select: { id: true, role: true } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    // Lockout protection: never delete the last active administrator.
+    if (target.role === 'ADMIN') {
+      const admins = await prisma.user.count({ where: { role: 'ADMIN', isActive: true } });
+      if (admins <= 1) return res.status(409).json({ error: 'Cannot delete the only administrator. Create another admin first.' });
+    }
+    // Hard delete. If the user is linked to bookings / other records, the FK
+    // constraint will reject it — return a friendly message to disable instead.
+    try {
+      const result = await prisma.user.deleteMany({ where: { id: req.params.id } });
+      if (result.count === 0) return res.status(404).json({ error: 'User not found' });
+    } catch (e) {
+      if (e.code === 'P2003' || e.code === 'P2014') {
+        return res.status(409).json({ error: 'This user is linked to bookings or other records and cannot be deleted. Disable the account instead.' });
+      }
+      throw e;
+    }
+    res.json({ message: 'User deleted' });
   } catch (err) {
     next(err);
   }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Box, Drawer, AppBar, Toolbar, IconButton, Typography, Avatar, Menu, MenuItem, useMediaQuery, useTheme, Divider, Chip } from '@mui/material';
+import { Box, Drawer, AppBar, Toolbar, IconButton, Typography, Avatar, Menu, MenuItem, useMediaQuery, useTheme, Divider, Chip, Button } from '@mui/material';
 import { Menu as MenuIcon, Logout, Settings, Person } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -27,11 +27,12 @@ export default function Layout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
-  const { user, logout } = useAuth();
+  const { user, logout, impersonating, exitImpersonation } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogout = () => { logout(); toast.info('Logged out'); navigate('/login'); };
+  const handleExitImpersonation = async () => { await exitImpersonation(); toast.info('Returned to Super Admin'); navigate('/super-admin'); };
 
   // RBAC route guard: if the server resolved a permission set and the current
   // tab maps to a feature the user lacks `:view` for, bounce to the dashboard.
@@ -123,6 +124,19 @@ export default function Layout() {
       )}
 
       <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 8, minHeight: '100vh', bgcolor: '#F7F2E8' }}>
+        {impersonating && (
+          <Box sx={{
+            mb: 2, px: 2, py: 1, borderRadius: 2, bgcolor: '#7C3AED', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1,
+          }}>
+            <Typography variant="body2" fontWeight={700}>
+              ⚠️ Proxy session — you are viewing <strong>{user?.tenant?.name}</strong> as its administrator. Actions you take are real.
+            </Typography>
+            <Button size="small" variant="contained" color="inherit" sx={{ color: '#7C3AED', fontWeight: 700 }} onClick={handleExitImpersonation}>
+              Exit to Super Admin
+            </Button>
+          </Box>
+        )}
         {blocked ? <Navigate to="/dashboard" replace /> : <Outlet />}
       </Box>
     </Box>

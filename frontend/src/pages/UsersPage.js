@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Box, Typography, Button, Card, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Chip, TextField, InputAdornment, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Grid, TablePagination, Divider, FormControl, Select } from '@mui/material';
-import { Add, Search, Edit, Business, Person, Security } from '@mui/icons-material';
+import { Add, Search, Edit, Business, Person, Security, Delete } from '@mui/icons-material';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
 import { fmtDate } from '../utils/helpers';
 import { PATTERNS, MESSAGES, alphaOnly } from '../utils/validation';
 
@@ -76,10 +76,21 @@ export default function UsersPage() {
 
   const toggleActive = async (user) => {
     try {
-      await api.put(`/users/${user.id}`, { ...user, isActive: !user.isActive });
+      await api.put(`/users/${user.id}`, { isActive: !user.isActive });
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update user');
+    }
+  };
+
+  const handleDelete = async (user) => {
+    if (!window.confirm(`Permanently delete "${user.name}"? This cannot be undone.\n\n(If the user has bookings, disable them instead.)`)) return;
+    try {
+      await api.delete(`/users/${user.id}`);
+      toast.success('User deleted');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete user');
     }
   };
 
@@ -145,9 +156,10 @@ export default function UsersPage() {
                     <TableCell><Chip label={u.isActive ? 'Active' : 'Inactive'} color={u.isActive ? 'success' : 'error'} size="small" /></TableCell>
                     <TableCell><Typography variant="caption">{fmtDate(u.createdAt)}</Typography></TableCell>
                     <TableCell>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
                         <Button size="small" startIcon={<Edit />} onClick={() => openEdit(u)}>Edit</Button>
-                        <Button size="small" color={u.isActive ? 'error' : 'success'} onClick={() => toggleActive(u)}>{u.isActive ? 'Disable' : 'Enable'}</Button>
+                        <Button size="small" color={u.isActive ? 'warning' : 'success'} onClick={() => toggleActive(u)}>{u.isActive ? 'Disable' : 'Enable'}</Button>
+                        <Button size="small" color="error" startIcon={<Delete />} onClick={() => handleDelete(u)}>Delete</Button>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -169,22 +181,26 @@ export default function UsersPage() {
               {!editing && <Grid item xs={12}><TextField fullWidth label="Password" type="password" helperText="Default: Temp@1234" {...register('password')} /></Grid>}
 
               <Grid item xs={6}>
-                <TextField fullWidth select label="Role" defaultValue="CUSTOMER" {...register('role')}>
-                  <MenuItem value="ADMIN">Admin</MenuItem>
-                  <MenuItem value="AGENT">Agent</MenuItem>
-                  <MenuItem value="CUSTOMER">Customer</MenuItem>
-                </TextField>
+                <Controller name="role" control={control} defaultValue="CUSTOMER" render={({ field }) => (
+                  <TextField fullWidth select label="Role" {...field}>
+                    <MenuItem value="ADMIN">Admin</MenuItem>
+                    <MenuItem value="AGENT">Agent</MenuItem>
+                    <MenuItem value="CUSTOMER">Customer</MenuItem>
+                  </TextField>
+                )} />
               </Grid>
               <Grid item xs={6}><TextField fullWidth label="Phone" error={!!errors.phone} helperText={errors.phone?.message} {...register('phone', { pattern: { value: PATTERNS.PHONE, message: MESSAGES.PHONE } })} /></Grid>
 
               {/* RBAC custom-role assignment */}
               <Grid item xs={12}>
-                <TextField fullWidth select label="Custom Role (optional)" defaultValue="" {...register('customRoleId')}
-                  helperText="Overrides the built-in role's tab access. “Default” keeps the built-in role."
-                  InputProps={{ startAdornment: <InputAdornment position="start"><Security fontSize="small" sx={{ color: '#C9A227' }} /></InputAdornment> }}>
-                  <MenuItem value=""><em>Default (built-in role)</em></MenuItem>
-                  {customRoles.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
-                </TextField>
+                <Controller name="customRoleId" control={control} defaultValue="" render={({ field }) => (
+                  <TextField fullWidth select label="Custom Role (optional)" {...field} value={field.value || ''}
+                    helperText="Overrides the built-in role's tab access. “Default” keeps the built-in role."
+                    InputProps={{ startAdornment: <InputAdornment position="start"><Security fontSize="small" sx={{ color: '#C9A227' }} /></InputAdornment> }}>
+                    <MenuItem value=""><em>Default (built-in role)</em></MenuItem>
+                    {customRoles.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+                  </TextField>
+                )} />
               </Grid>
 
               {/* Customer Type — only shown for CUSTOMER role */}
@@ -192,10 +208,12 @@ export default function UsersPage() {
                 <>
                   <Grid item xs={12}>
                     <Divider sx={{ mb: 1 }}><Typography variant="caption" color="text.secondary">Customer Classification</Typography></Divider>
-                    <TextField fullWidth select label="Customer Type" defaultValue="B2C" {...register('customerType')}>
-                      <MenuItem value="B2C"><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Person fontSize="small" /> B2C — Individual Customer</Box></MenuItem>
-                      <MenuItem value="B2B"><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Business fontSize="small" /> B2B — Corporate / Company</Box></MenuItem>
-                    </TextField>
+                    <Controller name="customerType" control={control} defaultValue="B2C" render={({ field }) => (
+                      <TextField fullWidth select label="Customer Type" {...field}>
+                        <MenuItem value="B2C"><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Person fontSize="small" /> B2C — Individual Customer</Box></MenuItem>
+                        <MenuItem value="B2B"><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Business fontSize="small" /> B2B — Corporate / Company</Box></MenuItem>
+                      </TextField>
+                    )} />
                   </Grid>
 
                   {isB2B && (

@@ -110,6 +110,51 @@ const activateTenant = async (req, res, next) => {
   }
 };
 
+// ── Proxy login (impersonation) ───────────────────────────────────────────────
+// A SUPER_ADMIN can obtain a session token scoped to an active tenant, acting as
+// that tenant's administrator (full operational access: view data, create users,
+// bookings, vouchers, etc.). The token is short-lived and the event is audited.
+const impersonate = async (req, res, next) => {
+  try {
+    const jwt = require('jsonwebtoken');
+    const tenant = await prisma.tenant.findFirst({ where: { id: req.params.id } });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    if (!['ACTIVE', 'TRIAL'].includes(tenant.status)) {
+      return res.status(400).json({ error: `Tenant is ${tenant.status.toLowerCase()} — only active tenants can be accessed` });
+    }
+    // Act as an existing active ADMIN of the tenant so all existing middleware
+    // (authenticate loads the user from the DB) and permissions work unchanged.
+    const admin = await prisma.user.findFirst({
+      where: { tenantId: tenant.id, role: 'ADMIN', isActive: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!admin) return res.status(400).json({ error: 'Tenant has no active administrator to log in as' });
+
+    const token = jwt.sign(
+      { id: admin.id, tenantId: admin.tenantId, role: 'ADMIN', impersonatedBy: req.user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '4h' }
+    );
+
+    try {
+      await prisma.auditLog.create({
+        data: {
+          tenantId: tenant.id, userId: req.user.id,
+          action: 'super_admin.impersonate', entityType: 'tenant', entityId: tenant.id,
+          payload: JSON.stringify({ asUserId: admin.id, asEmail: admin.email }),
+          ipAddress: req.ip, userAgent: req.headers['user-agent'] || null,
+        },
+      });
+    } catch { /* audit best-effort */ }
+
+    res.json({
+      token,
+      user: { id: admin.id, name: admin.name, email: admin.email, role: 'ADMIN' },
+      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+    });
+  } catch (err) { next(err); }
+};
+
 const deleteTenant = async (req, res, next) => {
   try {
     const tenantId = req.params.id;
@@ -678,7 +723,7 @@ const crmPlatformStats = async (req, res, next) => {
 
 module.exports = {
   listTenants, getTenant, updateTenant,
-  suspendTenant, activateTenant, deleteTenant,
+  suspendTenant, activateTenant, deleteTenant, impersonate,
   platformStats, allBookings,
   listPlans, updatePlan, tenantUsage,
   // Approval workflow
