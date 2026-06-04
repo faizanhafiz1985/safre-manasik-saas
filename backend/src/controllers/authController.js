@@ -209,10 +209,22 @@ const me = async (req, res, next) => {
       select: {
         id: true, name: true, email: true, role: true, tenantId: true,
         phone: true, companyName: true, address: true, createdAt: true,
+        customRoleId: true,
+        customRole: { select: { id: true, name: true, key: true } },
         tenant: { select: { id: true, name: true, slug: true, status: true, plan: true, logoUrl: true, primaryColor: true } },
       },
     });
-    res.json(user);
+
+    // RBAC: attach the user's effective permission set so the frontend can
+    // drive tab visibility + route guards from the server's source of truth.
+    let permissions = [];
+    try {
+      const { getEffectivePermissions } = require('../services/permissionService');
+      // Resolve from the freshly-fetched record (it carries customRoleId).
+      permissions = [...await getEffectivePermissions({ ...req.user, customRoleId: user.customRoleId, role: user.role, tenantId: user.tenantId })];
+    } catch { /* fall back to empty — frontend then uses legacy role gating */ }
+
+    res.json({ ...user, permissions });
   } catch (err) {
     next(err);
   }

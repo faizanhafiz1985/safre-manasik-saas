@@ -19,10 +19,11 @@ const D12 = /^\d{12}$/;
 const ALPHANUM = /^[A-Za-z0-9]+$/;
 const VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
 
+const EMPTY_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', perNightPrice: '' };
 const EMPTY = {
   type: 'HOTEL',
   companyName: '', firstName: '', lastName: '', mobile: '', whatsapp: '', passport: '',
-  hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', perNightPrice: '',
+  trips: [{ ...EMPTY_TRIP }],
   vehicleType: '', pickupLocation: '', dropoffLocation: '', travelDate: '', passengerCount: '', transportPrice: '',
 };
 
@@ -75,15 +76,20 @@ export default function VoucherFormsPage() {
   };
 
   const isHotel = form.type === 'HOTEL';
-  const liveTotal = isHotel ? nights(form.checkInDate, form.checkOutDate) * Number(form.perNightPrice || 0) : Number(form.transportPrice || 0);
+  const tripTotal = (t) => nights(t.checkInDate, t.checkOutDate) * Number(t.perNightPrice || 0);
+  const liveTotal = isHotel ? (form.trips || []).reduce((s, t) => s + tripTotal(t), 0) : Number(form.transportPrice || 0);
 
-  const onHotelSelect = (hotelId) => {
+  const updateTrip = (idx, patch) => setForm((f) => ({ ...f, trips: f.trips.map((t, i) => i === idx ? { ...t, ...patch } : t) }));
+  const addTrip = () => setForm((f) => ({ ...f, trips: [...f.trips, { ...EMPTY_TRIP }] }));
+  const removeTrip = (idx) => setForm((f) => ({ ...f, trips: f.trips.length > 1 ? f.trips.filter((_, i) => i !== idx) : f.trips }));
+
+  const onHotelSelect = (idx, hotelId) => {
     const h = hotels.find((x) => x.id === hotelId);
-    setForm((f) => ({
-      ...f, hotelId,
+    updateTrip(idx, {
+      hotelId,
       hotelName: h?.name || '',
-      perNightPrice: h?.pricePerNight != null ? String(h.pricePerNight) : f.perNightPrice,
-    }));
+      perNightPrice: h?.pricePerNight != null ? String(h.pricePerNight) : form.trips[idx].perNightPrice,
+    });
   };
 
   function validate() {
@@ -95,11 +101,16 @@ export default function VoucherFormsPage() {
     if (form.whatsapp && !D12.test((form.whatsapp || '').replace(/\s/g, ''))) e.whatsapp = 'Exactly 12 digits';
     if (!form.passport || !ALPHANUM.test(form.passport.trim())) e.passport = 'Alphanumeric, required';
     if (isHotel) {
-      if (!form.hotelName) e.hotelName = 'Select a hotel';
-      if (!form.checkInDate) e.checkInDate = 'Required';
-      if (!form.checkOutDate) e.checkOutDate = 'Required';
-      if (form.checkInDate && form.checkOutDate && nights(form.checkInDate, form.checkOutDate) <= 0) e.checkOutDate = 'Must be after check-in';
-      if (form.perNightPrice === '' || isNaN(Number(form.perNightPrice))) e.perNightPrice = 'Required numeric';
+      e.trips = (form.trips || []).map((t) => {
+        const te = {};
+        if (!t.hotelName) te.hotelName = 'Select a hotel';
+        if (!t.checkInDate) te.checkInDate = 'Required';
+        if (!t.checkOutDate) te.checkOutDate = 'Required';
+        if (t.checkInDate && t.checkOutDate && nights(t.checkInDate, t.checkOutDate) <= 0) te.checkOutDate = 'After check-in';
+        if (t.perNightPrice === '' || isNaN(Number(t.perNightPrice))) te.perNightPrice = 'Required';
+        return te;
+      });
+      if (e.trips.every((te) => Object.keys(te).length === 0)) delete e.trips;
     } else {
       if (!form.vehicleType) e.vehicleType = 'Required';
       if (!form.pickupLocation) e.pickupLocation = 'Required';
@@ -251,31 +262,50 @@ export default function VoucherFormsPage() {
 
           {isHotel ? (
             <>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: '#1B4B35' }}>Hotel Details</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small" error={!!errs.hotelName}>
-                    <InputLabel>Hotel Name *</InputLabel>
-                    <Select label="Hotel Name *" value={form.hotelId} onChange={(e) => onHotelSelect(e.target.value)}>
-                      {hotels.length === 0 && <MenuItem value="" disabled>No hotels found — add hotels first</MenuItem>}
-                      {hotels.map((h) => <MenuItem key={h.id} value={h.id}>{h.name}{h.city ? ` — ${h.city}` : ''}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                  {errs.hotelName && <Typography variant="caption" color="error">{errs.hotelName}</Typography>}
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField fullWidth size="small" label="Per Night Selling Price *" error={!!errs.perNightPrice}
-                    helperText={errs.perNightPrice || (form.hotelId && !form.perNightPrice ? 'No preset price — enter manually' : 'Auto-filled from hotel')}
-                    InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
-                    inputProps={{ onKeyDown: numericOnly }}
-                    value={form.perNightPrice} onChange={(e) => setForm({ ...form, perNightPrice: e.target.value })} />
-                </Grid>
-                <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-in Date *" InputLabelProps={{ shrink: true }}
-                  error={!!errs.checkInDate} helperText={errs.checkInDate} value={form.checkInDate} onChange={(e) => setForm({ ...form, checkInDate: e.target.value })} /></Grid>
-                <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-out Date *" InputLabelProps={{ shrink: true }}
-                  inputProps={{ min: form.checkInDate || undefined }}
-                  error={!!errs.checkOutDate} helperText={errs.checkOutDate} value={form.checkOutDate} onChange={(e) => setForm({ ...form, checkOutDate: e.target.value })} /></Grid>
-              </Grid>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1B4B35' }}>Trips ({form.trips.length})</Typography>
+                <Button size="small" startIcon={<Add />} variant="outlined" onClick={addTrip}>Add Trip</Button>
+              </Box>
+              {form.trips.map((t, i) => {
+                const te = errs.trips?.[i] || {};
+                return (
+                  <Card key={i} variant="outlined" sx={{ p: 2, mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Chip size="small" label={`Trip ${i + 1}`} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Subtotal: {SAR(tripTotal(t))} ({nights(t.checkInDate, t.checkOutDate)} nights)
+                        </Typography>
+                        {form.trips.length > 1 && <IconButton size="small" color="error" onClick={() => removeTrip(i)}><Delete fontSize="small" /></IconButton>}
+                      </Box>
+                    </Box>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth size="small" error={!!te.hotelName}>
+                          <InputLabel>Hotel Name *</InputLabel>
+                          <Select label="Hotel Name *" value={t.hotelId} onChange={(e) => onHotelSelect(i, e.target.value)}>
+                            {hotels.length === 0 && <MenuItem value="" disabled>No hotels found — add hotels first</MenuItem>}
+                            {hotels.map((h) => <MenuItem key={h.id} value={h.id}>{h.name}{h.city ? ` — ${h.city}` : ''}</MenuItem>)}
+                          </Select>
+                        </FormControl>
+                        {te.hotelName && <Typography variant="caption" color="error">{te.hotelName}</Typography>}
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField fullWidth size="small" label="Per Night Selling Price *" error={!!te.perNightPrice}
+                          helperText={te.perNightPrice || (t.hotelId && !t.perNightPrice ? 'No preset price — enter manually' : 'Auto-filled from hotel')}
+                          InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
+                          inputProps={{ onKeyDown: numericOnly }}
+                          value={t.perNightPrice} onChange={(e) => updateTrip(i, { perNightPrice: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-in Date *" InputLabelProps={{ shrink: true }}
+                        error={!!te.checkInDate} helperText={te.checkInDate} value={t.checkInDate} onChange={(e) => updateTrip(i, { checkInDate: e.target.value })} /></Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-out Date *" InputLabelProps={{ shrink: true }}
+                        inputProps={{ min: t.checkInDate || undefined }}
+                        error={!!te.checkOutDate} helperText={te.checkOutDate} value={t.checkOutDate} onChange={(e) => updateTrip(i, { checkOutDate: e.target.value })} /></Grid>
+                    </Grid>
+                  </Card>
+                );
+              })}
             </>
           ) : (
             <>
@@ -305,7 +335,7 @@ export default function VoucherFormsPage() {
           {/* Auto-calculated total */}
           <Box sx={{ mt: 2, p: 1.5, borderRadius: 2, bgcolor: '#0D2B1A', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="body2">
-              Total Value {isHotel && `(${nights(form.checkInDate, form.checkOutDate)} nights × ${SAR(form.perNightPrice)})`}
+              Total Value {isHotel && `(${form.trips.length} trip${form.trips.length > 1 ? 's' : ''})`}
             </Typography>
             <Typography variant="h6" sx={{ color: '#C9A227', fontWeight: 800 }}>{SAR(liveTotal)}</Typography>
           </Box>

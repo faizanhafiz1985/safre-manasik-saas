@@ -185,9 +185,78 @@ async function ensureVoucherFormTables() {
     `);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fv_tenant ON form_vouchers("tenantId")`);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fv_status ON form_vouchers("tenantId", status)`);
-    logger.info('[bootstrap] hotels.pricePerNight + form_vouchers table ready');
+    // Multi-trip support: JSON array of hotel trips on a single voucher.
+    await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS trips JSONB`);
+    logger.info('[bootstrap] hotels.pricePerNight + form_vouchers (+trips) table ready');
   } catch (err) {
     logger.error(`[bootstrap] ensureVoucherFormTables failed: ${err.message}`);
+  }
+}
+
+async function ensureRbacTables() {
+  const { DEFAULT_PERMISSIONS } = require('./config/permissions');
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS tenant_roles (
+        id          VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"  VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        key         VARCHAR(64)  NOT NULL,
+        name        TEXT         NOT NULL,
+        description TEXT,
+        "isSystem"  BOOLEAN      NOT NULL DEFAULT false,
+        "isActive"  BOOLEAN      NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_tenant_role_key UNIQUE ("tenantId", key)
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_tenant_roles_tenant ON tenant_roles("tenantId")`);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS role_permissions (
+        id         VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId" VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "roleId"   VARCHAR(36)  NOT NULL REFERENCES tenant_roles(id) ON DELETE CASCADE,
+        feature    VARCHAR(64)  NOT NULL,
+        action     VARCHAR(16)  NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_role_perm UNIQUE ("roleId", feature, action)
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_role_perms_tenant ON role_permissions("tenantId")`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "customRoleId" VARCHAR(36) REFERENCES tenant_roles(id) ON DELETE SET NULL`);
+
+    // Seed the three built-in system roles + their default grants for every
+    // tenant that doesn't have them yet (idempotent, runs on each boot).
+    const tenants = await prisma.$queryRawUnsafe(`SELECT id FROM tenants`);
+    for (const t of tenants) {
+      for (const key of ['ADMIN', 'AGENT', 'CUSTOMER']) {
+        const existing = await prisma.$queryRawUnsafe(
+          `SELECT id FROM tenant_roles WHERE "tenantId" = $1 AND key = $2 LIMIT 1`, t.id, key,
+        );
+        let roleId = existing[0]?.id;
+        if (!roleId) {
+          const ins = await prisma.$queryRawUnsafe(
+            `INSERT INTO tenant_roles (id, "tenantId", key, name, "isSystem", "isActive", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, true, true, NOW(), NOW()) RETURNING id`,
+            t.id, key, key.charAt(0) + key.slice(1).toLowerCase(),
+          );
+          roleId = ins[0].id;
+          // Seed default grants for this fresh system role
+          for (const p of DEFAULT_PERMISSIONS[key]) {
+            const [feature, action] = p.split(':');
+            await prisma.$executeRawUnsafe(
+              `INSERT INTO role_permissions (id, "tenantId", "roleId", feature, action, "createdAt")
+               VALUES (gen_random_uuid()::text, $1, $2, $3, $4, NOW())
+               ON CONFLICT ("roleId", feature, action) DO NOTHING`,
+              t.id, roleId, feature, action,
+            );
+          }
+        }
+      }
+    }
+    logger.info('[bootstrap] RBAC tables + per-tenant system roles ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensureRbacTables failed: ${err.message}`);
   }
 }
 
@@ -301,6 +370,7 @@ async function runBootstrap() {
   await ensurePasswordResetTokensTable();
   await ensureCustomerTables();
   await ensureVoucherFormTables();
+  await ensureRbacTables();
   logger.info('[bootstrap] Startup tasks complete.');
 }
 

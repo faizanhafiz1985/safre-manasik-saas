@@ -55,15 +55,18 @@ function validateVoucher(body) {
   if (!body.passport || !ALPHANUM.test(String(body.passport).trim())) errors.push('Passport # is required (alphanumeric)');
 
   if (type === 'HOTEL') {
-    if (!body.hotelName || !String(body.hotelName).trim()) errors.push('Hotel name is required');
-    if (!body.checkInDate) errors.push('Check-in date is required');
-    if (!body.checkOutDate) errors.push('Check-out date is required');
-    if (body.checkInDate && body.checkOutDate && nightsBetween(body.checkInDate, body.checkOutDate) <= 0) {
-      errors.push('Check-out date must be after check-in date');
-    }
-    if (body.perNightPrice === undefined || body.perNightPrice === '' || isNaN(Number(body.perNightPrice)) || Number(body.perNightPrice) < 0) {
-      errors.push('Per-night selling price is required (numeric)');
-    }
+    // A hotel voucher may carry one or more trips. Accept a `trips` array, or
+    // fall back to the legacy single-trip fields for older clients.
+    const trips = rawTrips(body);
+    if (!trips.length) errors.push('At least one trip is required');
+    trips.forEach((t, i) => {
+      const n = i + 1;
+      if (!t.hotelName || !String(t.hotelName).trim()) errors.push(`Trip ${n}: hotel name is required`);
+      if (!t.checkInDate) errors.push(`Trip ${n}: check-in date is required`);
+      if (!t.checkOutDate) errors.push(`Trip ${n}: check-out date is required`);
+      if (t.checkInDate && t.checkOutDate && nightsBetween(t.checkInDate, t.checkOutDate) <= 0) errors.push(`Trip ${n}: check-out must be after check-in`);
+      if (t.perNightPrice === undefined || t.perNightPrice === '' || isNaN(Number(t.perNightPrice)) || Number(t.perNightPrice) < 0) errors.push(`Trip ${n}: per-night price is required (numeric)`);
+    });
   } else {
     if (!body.vehicleType || !String(body.vehicleType).trim()) errors.push('Vehicle type is required');
     if (!body.pickupLocation || !String(body.pickupLocation).trim()) errors.push('Pickup location is required');
@@ -76,12 +79,36 @@ function validateVoucher(body) {
   return { type, errors };
 }
 
+// Normalise a hotel voucher's trips: read body.trips[] or wrap the legacy
+// single-trip fields into a one-element array.
+function rawTrips(body) {
+  if (Array.isArray(body.trips) && body.trips.length) return body.trips;
+  if (body.hotelName || body.checkInDate) {
+    return [{ hotelName: body.hotelName, hotelId: body.hotelId, checkInDate: body.checkInDate, checkOutDate: body.checkOutDate, perNightPrice: body.perNightPrice }];
+  }
+  return [];
+}
+
+// Build the persisted trips array with computed nights + per-trip line totals.
+function buildTrips(body) {
+  return rawTrips(body).map((t) => {
+    const nights = Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate));
+    const price = Number(t.perNightPrice || 0);
+    return {
+      hotelId: t.hotelId || null,
+      hotelName: String(t.hotelName || '').trim(),
+      checkInDate: t.checkInDate,
+      checkOutDate: t.checkOutDate,
+      perNightPrice: price,
+      nights,
+      lineTotal: nights * price,
+    };
+  });
+}
+
 // Compute the stored total value from the typed fields.
 function computeTotal(type, body) {
-  if (type === 'HOTEL') {
-    const nights = nightsBetween(body.checkInDate, body.checkOutDate);
-    return Math.max(0, nights) * Number(body.perNightPrice || 0);
-  }
+  if (type === 'HOTEL') return buildTrips(body).reduce((s, t) => s + t.lineTotal, 0);
   return Number(body.transportPrice || 0);
 }
 
@@ -150,13 +177,18 @@ const create = async (req, res, next) => {
       passport: String(req.body.passport).trim(),
       totalValue,
       createdById: req.user.id,
-      ...(type === 'HOTEL' ? {
-        hotelId: req.body.hotelId || null,
-        hotelName: String(req.body.hotelName).trim(),
-        checkInDate: new Date(req.body.checkInDate),
-        checkOutDate: new Date(req.body.checkOutDate),
-        perNightPrice: Number(req.body.perNightPrice),
-      } : {
+      ...(type === 'HOTEL' ? (() => {
+        const trips = buildTrips(req.body);
+        const first = trips[0];
+        return {
+          trips,                                   // full multi-trip array (JSON)
+          hotelId: first.hotelId,                  // legacy columns from trip[0]
+          hotelName: first.hotelName,
+          checkInDate: new Date(first.checkInDate),
+          checkOutDate: new Date(first.checkOutDate),
+          perNightPrice: first.perNightPrice,
+        };
+      })() : {
         vehicleType: String(req.body.vehicleType).trim(),
         pickupLocation: String(req.body.pickupLocation).trim(),
         dropoffLocation: String(req.body.dropoffLocation).trim(),
@@ -218,10 +250,14 @@ const printHtml = async (req, res, next) => {
     if (!v) return res.status(404).send('<h1>Voucher not found</h1>');
 
     const tenant = req.user.tenantId
-      ? await prisma.tenant.findFirst({ where: { id: req.user.tenantId }, select: { name: true, vatNumber: true, crNumber: true, primaryColor: true } }).catch(() => null)
+      ? await prisma.tenant.findFirst({ where: { id: req.user.tenantId }, select: { name: true, vatNumber: true, crNumber: true, address: true, city: true, country: true, logoUrl: true, contactPhone: true, contactEmail: true, primaryColor: true } }).catch(() => null)
       : null;
     const brand = tenant?.name || 'Safre Manasik';
     const accent = '#1B4B35';
+    // Resolve a printable logo URL (absolute, or prefix the app origin for relative paths).
+    const rawLogo = tenant?.logoUrl || '';
+    const logoUrl = rawLogo ? (/^https?:\/\//i.test(rawLogo) ? rawLogo : `https://app.safremanasik.com${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`) : '';
+    const addressLine = [tenant?.address, tenant?.city, tenant?.country].filter(Boolean).join(', ');
     const isConfirmed = v.status === 'CONFIRMED';
     const statusColor = isConfirmed ? '#1B4B35' : '#B8860B';
 
@@ -233,19 +269,39 @@ const printHtml = async (req, res, next) => {
     // this voucher's total value (it derives 15% VAT internally).
     const qrDataUrl = await generateZatcaQrDataUrl({ totalAmount: Number(v.totalValue || 0) }, tenant || {});
 
-    const details = v.type === 'HOTEL' ? `
-      <tr><td class="l">Hotel</td><td class="v">${esc(v.hotelName)}</td></tr>
-      <tr><td class="l">Check-in</td><td class="v">${fmtDate(v.checkInDate)}</td></tr>
-      <tr><td class="l">Check-out</td><td class="v">${fmtDate(v.checkOutDate)}</td></tr>
-      <tr><td class="l">Nights</td><td class="v">${nightsBetween(v.checkInDate, v.checkOutDate)}</td></tr>
-      <tr><td class="l">Per-night Price</td><td class="v">${fmtMoney(v.perNightPrice)}</td></tr>
-    ` : `
+    // Hotel trips: prefer the multi-trip array; fall back to legacy single fields.
+    const tripList = Array.isArray(v.trips) && v.trips.length
+      ? v.trips
+      : (v.hotelName ? [{ hotelName: v.hotelName, checkInDate: v.checkInDate, checkOutDate: v.checkOutDate, perNightPrice: v.perNightPrice, nights: nightsBetween(v.checkInDate, v.checkOutDate), lineTotal: Number(v.totalValue || 0) }] : []);
+
+    const tripsTable = `
+      <table style="margin-top:8px">
+        <thead><tr>
+          <th style="width:30px">#</th><th>Hotel</th><th>Check-in</th><th>Check-out</th>
+          <th style="text-align:center">Nights</th><th style="text-align:right">Per-night</th><th style="text-align:right">Line Total</th>
+        </tr></thead>
+        <tbody>
+          ${tripList.map((t, i) => `<tr>
+            <td>${i + 1}</td>
+            <td>${esc(t.hotelName)}</td>
+            <td>${fmtDate(t.checkInDate)}</td>
+            <td>${fmtDate(t.checkOutDate)}</td>
+            <td style="text-align:center">${t.nights ?? nightsBetween(t.checkInDate, t.checkOutDate)}</td>
+            <td style="text-align:right">${fmtMoney(t.perNightPrice)}</td>
+            <td style="text-align:right">${fmtMoney(t.lineTotal ?? (Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate)) * Number(t.perNightPrice || 0)))}</td>
+          </tr>`).join('')}
+          <tr><td colspan="6" style="text-align:right;font-weight:700;border-top:2px solid ${accent}">Grand Total</td>
+              <td style="text-align:right;font-weight:800;color:${accent};border-top:2px solid ${accent}">${fmtMoney(v.totalValue)}</td></tr>
+        </tbody>
+      </table>`;
+
+    const transportTable = `<table>
       <tr><td class="l">Vehicle Type</td><td class="v">${esc(v.vehicleType)}</td></tr>
       <tr><td class="l">Route</td><td class="v">${esc(v.pickupLocation)} → ${esc(v.dropoffLocation)}</td></tr>
       <tr><td class="l">Travel Date</td><td class="v">${fmtDate(v.travelDate)}</td></tr>
       ${v.passengerCount ? `<tr><td class="l">Passengers</td><td class="v">${v.passengerCount}</td></tr>` : ''}
       <tr><td class="l">Price</td><td class="v">${fmtMoney(v.transportPrice)}</td></tr>
-    `;
+    </table>`;
 
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>${esc(v.voucherNo)} — ${v.type} Voucher</title>
@@ -284,7 +340,17 @@ const printHtml = async (req, res, next) => {
     <span>Voucher No: <strong style="color:#C9A227">${esc(v.voucherNo)}</strong></span>
   </div>
   <div class="hdr">
-    <div class="brand">${esc(brand)}</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      ${logoUrl ? `<img src="${esc(logoUrl)}" alt="${esc(brand)}" style="height:56px;max-width:160px;object-fit:contain"/>` : ''}
+      <div>
+        <div class="brand">${esc(brand)}</div>
+        ${addressLine ? `<div style="font-size:10px;color:#64748b;margin-top:2px">${esc(addressLine)}</div>` : ''}
+        <div style="font-size:10px;color:#64748b">
+          ${tenant?.crNumber ? `CR No. ${esc(tenant.crNumber)}` : ''}${tenant?.crNumber && tenant?.vatNumber ? ' · ' : ''}${tenant?.vatNumber ? `VAT No. ${esc(tenant.vatNumber)}` : ''}
+        </div>
+        ${(tenant?.contactPhone || tenant?.contactEmail) ? `<div style="font-size:10px;color:#64748b">${esc(tenant.contactPhone || '')}${tenant?.contactPhone && tenant?.contactEmail ? ' · ' : ''}${esc(tenant.contactEmail || '')}</div>` : ''}
+      </div>
+    </div>
     <div style="text-align:right">
       <div class="badge">${v.status}</div>
       <div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.6">
@@ -303,12 +369,12 @@ const printHtml = async (req, res, next) => {
     <tr><td class="l">Passport #</td><td class="v">${esc(v.passport)}</td></tr>
   </table>
 
-  <h3>${v.type === 'HOTEL' ? 'Hotel Details' : 'Transport Details'}</h3>
-  <table>${details}</table>
+  <h3>${v.type === 'HOTEL' ? `Hotel Details${tripList.length > 1 ? ` — ${tripList.length} Trips` : ''}` : 'Transport Details'}</h3>
+  ${v.type === 'HOTEL' ? tripsTable : transportTable}
 
   <div class="bottom">
     <div class="amount">
-      <div class="lab">Total Value${v.type === 'HOTEL' ? ' (nights × per-night)' : ''}</div>
+      <div class="lab">Total Value${v.type === 'HOTEL' ? (tripList.length > 1 ? ' (sum of all trips)' : ' (nights × per-night)') : ''}</div>
       <div class="val">${fmtMoney(v.totalValue)}</div>
       <div style="font-size:10px;color:rgba(255,255,255,.65);margin-top:4px">Inclusive of applicable 15% VAT for ZATCA</div>
     </div>

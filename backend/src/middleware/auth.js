@@ -26,6 +26,7 @@ const authenticate = async (req, res, next) => {
               email: true,
               role: true,
               tenantId: true,
+              customRoleId: true,
               isActive: true,
               tenant: { select: { id: true, name: true, slug: true, status: true } },
             },

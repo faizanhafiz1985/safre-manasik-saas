@@ -218,6 +218,8 @@ model Tenant {
   customers          Customer[]
   customerPassengers CustomerPassenger[]
   formVouchers       FormVoucher[]
+  tenantRoles        TenantRole[]
+  rolePermissions    RolePermission[]
 
   @@index([slug])
   @@index([status])
@@ -260,6 +262,10 @@ model User {
   crmMessagesSent     CrmMessage[]            @relation("CrmMsgSender")
   crmNotifications    CrmNotification[]       @relation("CrmUserNotifications")
   passwordResetTokens PasswordResetToken[]
+
+  // ── RBAC: optional custom role (overrides the legacy `role` enum when set) ──
+  customRoleId String?
+  customRole   TenantRole? @relation("UserCustomRole", fields: [customRoleId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([role])
@@ -339,7 +345,12 @@ model FormVoucher {
   whatsapp    String?
   passport    String
 
-  // Hotel-specific
+  // Hotel-specific. A hotel voucher may hold MULTIPLE trips (segments). `trips`
+  // is a JSON array of { hotelName, hotelId, checkInDate, checkOutDate,
+  // perNightPrice, nights, lineTotal }. The single-hotel columns below are kept
+  // for backward compatibility (populated from trips[0]) and as a fallback for
+  // older single-trip vouchers created before multi-trip support.
+  trips         Json?
   hotelId       String?
   hotelName     String?
   checkInDate   DateTime?
@@ -369,6 +380,47 @@ model FormVoucher {
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("form_vouchers")
+}
+
+// ─── RBAC: tenant-defined roles + permission grants ───────────────────────────
+// Built-in roles (ADMIN/AGENT/CUSTOMER) are seeded per tenant as isSystem=true:
+// their permissions are editable but they can't be deleted. Custom roles are
+// isSystem=false. Permissions are deny-by-default (positive grants only).
+
+model TenantRole {
+  id          String   @id @default(uuid())
+  tenantId    String
+  key         String   // 'ADMIN' | 'AGENT' | 'CUSTOMER' | 'custom_<slug>'
+  name        String
+  description String?
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  users       User[]           @relation("UserCustomRole")
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("tenant_roles")
+}
+
+model RolePermission {
+  id        String   @id @default(uuid())
+  tenantId  String
+  roleId    String
+  feature   String   // catalog key, e.g. 'bookings'
+  action    String   // 'view' | 'create' | 'edit' | 'delete' | 'export'
+  createdAt DateTime @default(now())
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role   TenantRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, feature, action])
+  @@index([tenantId])
+  @@map("role_permissions")
 }
 
 // ─── Hotel ──────────────────────────────────────────────────────────────────
