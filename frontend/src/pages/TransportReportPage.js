@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Paper, Typography, TextField, Select, MenuItem, FormControl, InputLabel,
   Button, Table, TableHead, TableBody, TableRow, TableCell, Chip, Stack,
-  CircularProgress, Card, CardContent, Grid, LinearProgress,
+  CircularProgress, Card, CardContent, Grid, LinearProgress, Checkbox, Tooltip,
 } from '@mui/material';
 import { Download, FilterAlt, DirectionsBus, Group, Speed } from '@mui/icons-material';
 import api from '../services/api';
+import { toast } from 'react-toastify';
 
 const vehicleColors = { BUS: '#1B4B35', CAR: '#4A90D9', VIP: '#C9A227' };
 const statusColors  = { CONFIRMED: 'success', TENTATIVE: 'warning', MIXED: 'info', CANCELLED: 'error' };
@@ -32,6 +33,22 @@ export default function TransportReportPage() {
   }, [startDate, endDate, vehicleType]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Toggle an operational flag on every assignment within a grouped run.
+  const toggleFlag = async (run, field, value) => {
+    try {
+      await api.patch('/reports/transport-status', { ids: run.transportIds || [], [field]: value });
+      setData((prev) => ({
+        ...prev,
+        runs: prev.runs.map((r) =>
+          r === run || (r.transportIds && run.transportIds && r.transportIds.join() === run.transportIds.join())
+            ? { ...r, [field]: value, [`${field}Text`]: value ? 'Done' : 'Pending' }
+            : r),
+      }));
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update status');
+    }
+  };
 
   const downloadCsv = () => {
     const token = localStorage.getItem('token');
@@ -117,8 +134,8 @@ export default function TransportReportPage() {
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
           <FilterAlt color="primary" />
-          <TextField type="date" label="Start" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
-          <TextField type="date" label="End" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
+          <TextField type="date" label="Departure From" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" helperText="Filters by departure date" />
+          <TextField type="date" label="Departure To" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel>Vehicle Type</InputLabel>
             <Select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} label="Vehicle Type">
@@ -163,6 +180,8 @@ export default function TransportReportPage() {
                 <TableCell><strong>Occupancy</strong></TableCell>
                 <TableCell><strong>Bookings</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
+                <TableCell align="center"><strong>Departure Done</strong></TableCell>
+                <TableCell align="center"><strong>Transport Availed</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -190,6 +209,22 @@ export default function TransportReportPage() {
                   </TableCell>
                   <TableCell><Typography variant="caption">{r.bookingRefs}</Typography></TableCell>
                   <TableCell><Chip label={r.runStatus} size="small" color={statusColors[r.runStatus] || 'default'} /></TableCell>
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                      <Checkbox size="small" checked={!!r.departureDone}
+                        onChange={(e) => toggleFlag(r, 'departureDone', e.target.checked)} />
+                      <Chip size="small" label={r.departureDone ? 'Done' : 'Pending'}
+                        color={r.departureDone ? 'success' : 'default'} variant={r.departureDone ? 'filled' : 'outlined'} />
+                    </Box>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                      <Checkbox size="small" checked={!!r.transportAvailed}
+                        onChange={(e) => toggleFlag(r, 'transportAvailed', e.target.checked)} />
+                      <Chip size="small" label={r.transportAvailed ? 'Done' : 'Pending'}
+                        color={r.transportAvailed ? 'success' : 'default'} variant={r.transportAvailed ? 'filled' : 'outlined'} />
+                    </Box>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -660,6 +660,9 @@ model BookingTransport {
   departureAt DateTime?
   arrivalAt   DateTime?
   notes       String?
+  // Operational tracking flags toggled from the schedule/transport reports.
+  departureDone    Boolean @default(false)
+  transportAvailed Boolean @default(false)
   booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   route       Route?   @relation(fields: [routeId], references: [id], onDelete: Cascade)

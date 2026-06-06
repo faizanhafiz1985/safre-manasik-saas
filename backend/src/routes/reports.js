@@ -15,4 +15,8 @@ router.get('/daily-schedule/export', requirePermission('daily_schedule', 'export
 router.get('/transport-by-date', requirePermission('transport_report', 'view'), ctrl.transportByDate);
 router.get('/transport-by-date/export', requirePermission('transport_report', 'export'), ctrl.exportTransportCsv);
 
+// Toggle operational tracking flags (Departure Done / Transport Availed) on runs.
+// Used by both the Daily Schedule and Transport reports.
+router.patch('/transport-status', requirePermission('transport_report', 'edit'), ctrl.updateTransportStatus);
+
 module.exports = router;

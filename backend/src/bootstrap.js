@@ -248,7 +248,10 @@ async function ensureBookingColumns() {
   try {
     // Package is now optional on a booking — relax the legacy NOT NULL.
     await prisma.$executeRawUnsafe(`ALTER TABLE bookings ALTER COLUMN "packageId" DROP NOT NULL`);
-    logger.info('[bootstrap] bookings.packageId is now nullable');
+    // Operational tracking flags on transport runs (schedule/transport reports).
+    await prisma.$executeRawUnsafe(`ALTER TABLE booking_transports ADD COLUMN IF NOT EXISTS "departureDone" BOOLEAN NOT NULL DEFAULT false`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE booking_transports ADD COLUMN IF NOT EXISTS "transportAvailed" BOOLEAN NOT NULL DEFAULT false`);
+    logger.info('[bootstrap] bookings.packageId nullable + booking_transports tracking flags ready');
   } catch (err) {
     logger.error(`[bootstrap] ensureBookingColumns failed: ${err.message}`);
   }

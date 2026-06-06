@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Paper, Typography, TextField, Select, MenuItem, FormControl, InputLabel,
   Button, Table, TableHead, TableBody, TableRow, TableCell, Chip, Stack,
-  CircularProgress, Card, CardContent, Grid,
+  CircularProgress, Card, CardContent, Grid, Checkbox, Tooltip,
 } from '@mui/material';
 import { Download, FilterAlt, EventNote, Login, Logout, DirectionsBus } from '@mui/icons-material';
 import api from '../services/api';
+import { toast } from 'react-toastify';
 
 const eventColors = {
   'CHECK-IN': '#2E9E6B',
@@ -35,6 +36,22 @@ export default function DailySchedulePage() {
   }, [date, eventType, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Toggle an operational flag on a transport run and reflect it locally.
+  const toggleFlag = async (ev, field, value) => {
+    try {
+      await api.patch('/reports/transport-status', { ids: [ev.transportId], [field]: value });
+      setData((prev) => ({
+        ...prev,
+        events: prev.events.map((e) =>
+          e.transportId === ev.transportId
+            ? { ...e, [field]: value, [`${field}Text`]: value ? 'Done' : 'Pending' }
+            : e),
+      }));
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update status');
+    }
+  };
 
   const downloadCsv = () => {
     const token = localStorage.getItem('token');
@@ -89,7 +106,7 @@ export default function DailySchedulePage() {
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
           <FilterAlt color="primary" />
-          <TextField type="date" label="Date" value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
+          <TextField type="date" label="Date" value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" helperText="Check-ins, check-outs & transport departing on this date" />
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Event Type</InputLabel>
             <Select value={eventType} onChange={(e) => setEventType(e.target.value)} label="Event Type">
@@ -137,6 +154,8 @@ export default function DailySchedulePage() {
                 <TableCell><strong>Route</strong></TableCell>
                 <TableCell><strong>Driver</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
+                <TableCell align="center"><strong>Departure Done</strong></TableCell>
+                <TableCell align="center"><strong>Transport Availed</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -157,6 +176,31 @@ export default function DailySchedulePage() {
                   <TableCell>
                     <Chip label={ev.status} size="small"
                       color={ev.status === 'CONFIRMED' ? 'success' : ev.status === 'TENTATIVE' ? 'warning' : 'default'} />
+                  </TableCell>
+                  {/* Operational flags — only meaningful for transport runs */}
+                  <TableCell align="center">
+                    {ev.transportId ? (
+                      <Tooltip title={ev.departureDone ? 'Done' : 'Pending'}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                          <Checkbox size="small" checked={!!ev.departureDone}
+                            onChange={(e) => toggleFlag(ev, 'departureDone', e.target.checked)} />
+                          <Chip size="small" label={ev.departureDone ? 'Done' : 'Pending'}
+                            color={ev.departureDone ? 'success' : 'default'} variant={ev.departureDone ? 'filled' : 'outlined'} />
+                        </Box>
+                      </Tooltip>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell align="center">
+                    {ev.transportId ? (
+                      <Tooltip title={ev.transportAvailed ? 'Done' : 'Pending'}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                          <Checkbox size="small" checked={!!ev.transportAvailed}
+                            onChange={(e) => toggleFlag(ev, 'transportAvailed', e.target.checked)} />
+                          <Chip size="small" label={ev.transportAvailed ? 'Done' : 'Pending'}
+                            color={ev.transportAvailed ? 'success' : 'default'} variant={ev.transportAvailed ? 'filled' : 'outlined'} />
+                        </Box>
+                      </Tooltip>
+                    ) : '—'}
                   </TableCell>
                 </TableRow>
               ))}

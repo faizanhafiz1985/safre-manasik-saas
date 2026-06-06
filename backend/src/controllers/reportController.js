@@ -128,6 +128,12 @@ const dailySchedule = async (req, res, next) => {
           route: t.route ? `${t.route.fromLocation} → ${t.route.toLocation}` : '—',
           agent: t.booking.agent?.name || '—',
           status: t.booking.status,
+          // Operational tracking (transport runs only)
+          transportId: t.id,
+          departureDone: !!t.departureDone,
+          transportAvailed: !!t.transportAvailed,
+          departureDoneText: t.departureDone ? 'Done' : 'Pending',
+          transportAvailedText: t.transportAvailed ? 'Done' : 'Pending',
         });
       }
     }
@@ -215,12 +221,18 @@ const transportByDate = async (req, res, next) => {
           bookingRefs: [],
           passengerCount: 0,
           statuses: new Set(),
+          transportIds: [],
+          departureDoneAll: true,
+          transportAvailedAll: true,
         });
       }
       const g = groups.get(key);
       g.bookingRefs.push(t.booking.bookingRef);
       g.passengerCount += t.booking.totalPax;
       g.statuses.add(t.booking.status);
+      g.transportIds.push(t.id);
+      if (!t.departureDone) g.departureDoneAll = false;
+      if (!t.transportAvailed) g.transportAvailedAll = false;
     }
 
     const runs = Array.from(groups.values()).map((g) => ({
@@ -228,7 +240,14 @@ const transportByDate = async (req, res, next) => {
       bookingRefs: g.bookingRefs.join(', '),
       occupancyPct: g.vehicleCapacity > 0 ? Math.round((g.passengerCount / g.vehicleCapacity) * 1000) / 10 : 0,
       runStatus: g.statuses.size === 1 ? Array.from(g.statuses)[0] : 'MIXED',
+      // A run is "Done" only when every assignment in the group is done.
+      departureDone: g.departureDoneAll,
+      transportAvailed: g.transportAvailedAll,
+      departureDoneText: g.departureDoneAll ? 'Done' : 'Pending',
+      transportAvailedText: g.transportAvailedAll ? 'Done' : 'Pending',
       statuses: undefined,
+      departureDoneAll: undefined,
+      transportAvailedAll: undefined,
     }));
 
     runs.sort((a, b) => (a.runDate + a.departureTime).localeCompare(b.runDate + b.departureTime));
@@ -291,6 +310,8 @@ const exportDailyScheduleCsv = async (req, res, next) => {
       { key: 'route', label: 'Route' },
       { key: 'agent', label: 'Agent' },
       { key: 'status', label: 'Status' },
+      { key: 'departureDoneText', label: 'Departure Done' },
+      { key: 'transportAvailedText', label: 'Transport Availed' },
     ];
     const csv = toCsv(captureRes._data.events, cols);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -327,6 +348,8 @@ const exportTransportCsv = async (req, res, next) => {
       { key: 'occupancyPct', label: 'Occupancy %' },
       { key: 'bookingRefs', label: 'Bookings' },
       { key: 'runStatus', label: 'Status' },
+      { key: 'departureDoneText', label: 'Departure Done' },
+      { key: 'transportAvailedText', label: 'Transport Availed' },
     ];
     const csv = toCsv(captureRes._data.runs, cols);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -337,4 +360,33 @@ const exportTransportCsv = async (req, res, next) => {
   }
 };
 
-module.exports = { dailySchedule, transportByDate, exportDailyScheduleCsv, exportTransportCsv };
+// ─── Toggle operational flags on transport runs ─────────────────────────────
+// Body: { ids: [bookingTransportId...], departureDone?: bool, transportAvailed?: bool }
+// Daily Schedule sends a single id; the Transport Report sends every id in a run
+// group (so the whole grouped run flips together).
+const updateTransportStatus = async (req, res, next) => {
+  try {
+    const { ids, departureDone, transportAvailed } = req.body;
+    const idList = Array.isArray(ids) ? ids.filter(Boolean) : [];
+    if (!idList.length) return res.status(400).json({ error: 'At least one transport id is required' });
+    if (departureDone === undefined && transportAvailed === undefined) {
+      return res.status(400).json({ error: 'Provide departureDone and/or transportAvailed' });
+    }
+    const tenantId = getTenantId();
+    // Only touch rows whose booking belongs to the current tenant (defense in depth).
+    const rows = await prisma.bookingTransport.findMany({
+      where: { id: { in: idList } },
+      select: { id: true, booking: { select: { tenantId: true } } },
+    });
+    const allowed = rows.filter((r) => !tenantId || r.booking?.tenantId === tenantId).map((r) => r.id);
+    if (!allowed.length) return res.status(404).json({ error: 'No matching transport runs' });
+
+    const data = {};
+    if (departureDone !== undefined) data.departureDone = !!departureDone;
+    if (transportAvailed !== undefined) data.transportAvailed = !!transportAvailed;
+    await prisma.bookingTransport.updateMany({ where: { id: { in: allowed } }, data });
+    res.json({ updated: allowed.length, ...data });
+  } catch (err) { next(err); }
+};
+
+module.exports = { dailySchedule, transportByDate, exportDailyScheduleCsv, exportTransportCsv, updateTransportStatus };
