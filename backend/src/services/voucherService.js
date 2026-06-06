@@ -318,21 +318,16 @@ const getVoucherHtml = async (booking, type, voucherNo, tenant = {}) => {
     </div>
     ` : ''}
 
-    <!-- Amount + ZATCA QR -->
-    <div class="bottom-section">
-      <div class="amount-box">
-        <div class="label">Package Amount Summary</div>
-        <div class="sub">${booking.package?.name || ''} — ${booking.totalPax} pax</div>
-        <div class="amount-rows">
-          <div class="amount-row"><span>Base Amount:</span><span>${formatCurrency(base)}</span></div>
-          <div class="amount-row"><span>VAT (15%):</span><span>${formatCurrency(vatAmt)}</span></div>
-          <div class="amount-row total"><span>Total incl. VAT:</span><span>${formatCurrency(total)}</span></div>
+    <!-- Financial details are intentionally omitted from the voucher.
+         Pricing, VAT and the ZATCA tax QR appear on the corresponding invoice. -->
+    <div class="bottom-section" style="justify-content:flex-start;">
+      <div class="amount-box" style="background:#f8fafc;color:#475569;">
+        <div class="label" style="color:#1B4B35;">Booking Confirmation</div>
+        <div class="sub">${booking.package?.name ? booking.package.name + ' — ' : ''}${booking.totalPax} pax</div>
+        <div style="font-size:11px;margin-top:6px;line-height:1.5;">
+          This voucher confirms the services listed above.<br>
+          Pricing &amp; VAT are provided separately on the invoice.
         </div>
-      </div>
-      <div class="zatca-box">
-        <div class="zatca-title">ZATCA e-Invoice QR</div>
-        <img src="${qrDataUrl}" alt="ZATCA QR Code" style="width:110px;height:110px;" />
-        <div class="zatca-sub">Scan to verify invoice<br>VAT No: ${tenant.vatNumber || '300000000000003'}</div>
       </div>
     </div>
 

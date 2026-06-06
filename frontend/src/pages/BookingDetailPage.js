@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Typography, Card, CardContent, Grid, Chip, Button, Divider, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, MenuItem, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert } from '@mui/material';
-import { ArrowBack, ConfirmationNumber, Print, Add, Payment } from '@mui/icons-material';
+import { ArrowBack, ConfirmationNumber, Print, Add, Payment, Edit, Block } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -24,6 +24,8 @@ export default function BookingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [statusDialog, setStatusDialog] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
+  const [editDialog, setEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
@@ -56,6 +58,45 @@ export default function BookingDetailPage() {
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update status');
+    }
+  };
+
+  const openEdit = () => {
+    setEditForm({
+      travelDateFrom: booking.travelDateFrom ? String(booking.travelDateFrom).substring(0, 10) : '',
+      travelDateTo: booking.travelDateTo ? String(booking.travelDateTo).substring(0, 10) : '',
+      totalPax: booking.totalPax || 1,
+      totalAmount: Number(booking.totalAmount || 0),
+      notes: booking.notes || '',
+    });
+    setEditDialog(true);
+  };
+
+  const saveEdit = async () => {
+    try {
+      await api.put(`/bookings/${id}`, {
+        travelDateFrom: editForm.travelDateFrom,
+        travelDateTo: editForm.travelDateTo,
+        totalPax: Number(editForm.totalPax),
+        totalAmount: Number(editForm.totalAmount),
+        notes: editForm.notes,
+      });
+      toast.success('Booking updated');
+      setEditDialog(false);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update booking');
+    }
+  };
+
+  const cancelBooking = async () => {
+    if (!window.confirm(`Cancel booking ${booking.bookingRef}? This sets its status to Cancelled.`)) return;
+    try {
+      await api.patch(`/bookings/${id}/status`, { status: 'CANCELLED' });
+      toast.success('Booking cancelled');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to cancel booking');
     }
   };
 
@@ -109,6 +150,12 @@ export default function BookingDetailPage() {
 
       <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
         {isAdmin && <Button variant="outlined" onClick={() => setStatusDialog(true)}>Change Status</Button>}
+        {(isAdmin || isAgent) && booking.status !== 'CANCELLED' && (
+          <Button variant="outlined" startIcon={<Edit />} onClick={openEdit}>Edit</Button>
+        )}
+        {(isAdmin || isAgent) && booking.status !== 'CANCELLED' && (
+          <Button variant="outlined" color="error" startIcon={<Block />} onClick={cancelBooking}>Cancel Booking</Button>
+        )}
         <Button
           variant="outlined" startIcon={<ConfirmationNumber />}
           onClick={() => generateVoucher('TENTATIVE')}
@@ -158,7 +205,7 @@ export default function BookingDetailPage() {
             <CardContent>
               <Typography variant="subtitle1" gutterBottom>Travel Details</Typography>
               <InfoRow label="Package" value={booking.package?.name} />
-              <InfoRow label="Duration" value={`${booking.package?.durationDays} Days`} />
+              <InfoRow label="Duration" value={booking.package?.durationDays ? `${booking.package.durationDays} Days` : '-'} />
               <InfoRow label="Departure" value={fmtDate(booking.travelDateFrom)} />
               <InfoRow label="Return" value={fmtDate(booking.travelDateTo)} />
               <InfoRow label="Passengers" value={booking.totalPax} />
@@ -293,6 +340,40 @@ export default function BookingDetailPage() {
           </Grid>
         )}
       </Grid>
+
+      <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Booking</DialogTitle>
+        <DialogContent>
+          {editForm && (
+            <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              <Grid item xs={6}>
+                <TextField fullWidth label="Departure Date" type="date" InputLabelProps={{ shrink: true }}
+                  value={editForm.travelDateFrom} onChange={(e) => setEditForm((f) => ({ ...f, travelDateFrom: e.target.value }))} />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField fullWidth label="Return Date" type="date" InputLabelProps={{ shrink: true }}
+                  value={editForm.travelDateTo} onChange={(e) => setEditForm((f) => ({ ...f, travelDateTo: e.target.value }))} />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField fullWidth label="Total Pax" type="number" inputProps={{ min: 1 }}
+                  value={editForm.totalPax} onChange={(e) => setEditForm((f) => ({ ...f, totalPax: e.target.value }))} />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField fullWidth label="Total Amount (SAR)" type="number" inputProps={{ min: 0, onKeyDown: decimalOnly }}
+                  value={editForm.totalAmount} onChange={(e) => setEditForm((f) => ({ ...f, totalAmount: e.target.value }))} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline rows={2} label="Notes"
+                  value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} />
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialog(false)}>Cancel</Button>
+          <Button variant="contained" onClick={saveEdit}>Save Changes</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={statusDialog} onClose={() => setStatusDialog(false)}>
         <DialogTitle>Change Booking Status</DialogTitle>

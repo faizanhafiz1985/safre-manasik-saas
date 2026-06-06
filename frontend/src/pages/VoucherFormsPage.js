@@ -274,7 +274,10 @@ export default function VoucherFormsPage() {
                           {v.status === 'CONFIRMED' && (
                             <Tooltip title="Print Tax (Actual) invoice"><IconButton size="small" color="success" onClick={() => printInvoice(v, 'ACTUAL')}><Description fontSize="small" /></IconButton></Tooltip>
                           )}
-                          <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => del(v)}><Delete fontSize="small" /></IconButton></Tooltip>
+                          {/* Confirmed vouchers are finalized records and cannot be deleted. */}
+                          {v.status !== 'CONFIRMED' && (
+                            <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => del(v)}><Delete fontSize="small" /></IconButton></Tooltip>
+                          )}
                         </Box>
                       </TableCell>
                     </TableRow>
