@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>SAF202606001 — HOTEL Voucher</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:13px}
+  .page{max-width:800px;margin:18px auto;padding:0 18px}
+  .no-print{text-align:right;margin-bottom:8px}
+  .btn{background:#1B4B35;color:#fff;border:none;padding:9px 22px;border-radius:6px;font-weight:700;cursor:pointer}
+  .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:90px;font-weight:900;color:#1B4B35;opacity:.05;z-index:0;letter-spacing:8px}
+  .strip{background:#0D2B1A;color:#fff;padding:8px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:5px 5px 0 0}
+  .strip .t{font-weight:800;letter-spacing:2px;color:#C9A227}
+  .hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border:1px solid #e2e8f0;border-top:none}
+  .brand{font-size:22px;font-weight:800;color:#1B4B35}
+  .badge{padding:5px 16px;border-radius:4px;font-weight:800;letter-spacing:2px;color:#fff;background:#1B4B35}
+  h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#fff;background:#1B4B35;padding:5px 10px;margin:16px 0 8px;border-radius:3px}
+  table{width:100%;border-collapse:collapse}
+  td{padding:6px 10px;border-bottom:1px solid #eef2f6;font-size:12px}
+  td.l{color:#64748b;font-weight:600;width:38%}
+  td.v{font-weight:600}
+  .bottom{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;margin-top:16px}
+  .amount{background:linear-gradient(135deg,#0D2B1A,#1B4B35);color:#fff;padding:14px 18px;border-radius:6px}
+  .amount .lab{font-size:12px;color:rgba(255,255,255,.8)}
+  .amount .val{font-size:24px;font-weight:800;color:#C9A227;margin-top:4px}
+  .qr{text-align:center;border:1.5px solid #e2e8f0;border-radius:6px;padding:8px;background:#fafafa;min-width:140px}
+  .qr .qt{font-size:8px;font-weight:700;color:#1B4B35;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .terms{margin-top:16px;font-size:10px;color:#94a3b8;padding:8px 10px;background:#f8fafc;border-radius:4px;border-left:3px solid #1B4B35;line-height:1.5}
+  @media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style></head>
+<body>
+<div class="watermark">CONFIRMED</div>
+<div class="page">
+  <div class="no-print"><button class="btn" onclick="window.print()">🖨️ Print Voucher</button></div>
+  <div class="strip">
+    <span class="t">HOTEL VOUCHER</span>
+    <span>Voucher No: <strong style="color:#C9A227">SAF202606001</strong></span>
+  </div>
+  <div class="hdr">
+    <div class="brand">Voucher Demo Agency</div>
+    <div style="text-align:right">
+      <div class="badge">CONFIRMED</div>
+      <div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.6">
+        Issued: June 3, 2026<br>
+        Confirmed: June 3, 2026<br>HCN #: <strong>HCN9988776</strong>
+      </div>
+    </div>
+  </div>
+
+  <h3>Customer</h3>
+  <table>
+    <tr><td class="l">Company</td><td class="v">Al Salam Travels</td></tr>
+    <tr><td class="l">Name</td><td class="v">Yusuf Rahman</td></tr>
+    <tr><td class="l">Mobile</td><td class="v">966501234567</td></tr>
+    <tr><td class="l">WhatsApp</td><td class="v">966509876543</td></tr>
+    <tr><td class="l">Passport #</td><td class="v">AB1234567</td></tr>
+  </table>
+
+  <h3>Hotel Details</h3>
+  <table>
+      <tr><td class="l">Hotel</td><td class="v">Fairmont Makkah Clock Royal Tower</td></tr>
+      <tr><td class="l">Check-in</td><td class="v">July 1, 2026</td></tr>
+      <tr><td class="l">Check-out</td><td class="v">July 5, 2026</td></tr>
+      <tr><td class="l">Nights</td><td class="v">4</td></tr>
+      <tr><td class="l">Per-night Price</td><td class="v">SAR 850.00</td></tr>
+    </table>
+
+  <div class="bottom">
+    <div class="amount">
+      <div class="lab">Total Value (nights × per-night)</div>
+      <div class="val">SAR 3,400.00</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.65);margin-top:4px">Inclusive of applicable 15% VAT for ZATCA</div>
+    </div>
+    <div class="qr">
+      <div class="qt">ZATCA e-Invoice QR</div>
+      <img src="data:image/png;base64,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" alt="ZATCA QR" style="width:120px;height:120px"/>
+      <div style="font-size:7px;color:#94a3b8;margin-top:4px">VAT No: 300000000000003</div>
+    </div>
+  </div>
+
+  <div class="terms">
+    <strong>Terms &amp; Conditions:</strong> This voucher is subject to availability and the agency's booking policy.
+    All services on this <strong>CONFIRMED</strong> voucher are booked and finalized under HCN # HCN9988776.
+    <br>Issued by Voucher Demo Agency · Generated June 3, 2026.
+  </div>
+</div>
+</body></html>

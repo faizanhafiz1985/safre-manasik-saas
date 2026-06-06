@@ -26,7 +26,69 @@ async function getTenantFinancials(tenantId) {
   const pct = parseFloat(map.vat_percentage);
   const vatRate = (!isNaN(pct) && pct >= 0) ? pct / 100 : 0.15; // default 15%
   const currency = (map.currency || 'SAR').toUpperCase();
-  return { vatRate, currency };
+  // Tenant-configurable voucher T&C (falls back to a sensible default when unset).
+  const terms = (map.voucher_terms && String(map.voucher_terms).trim())
+    || 'This voucher is subject to availability and the agency\'s booking policy.';
+  return { vatRate, currency, terms };
+}
+
+// ── Atomic, gapless monthly invoice number: SAFPI/SAFAI + YYYY + MM + seq ──────
+// INSERT ... ON CONFLICT guarantees no two concurrent issues share a number, and
+// the counter only ever increments — it never resets mid-month.
+async function nextInvoiceNumber(tenantId, docType) {
+  const prefix = docType === 'PROFORMA' ? 'SAFPI' : 'SAFAI';
+  const now = new Date();
+  const period = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const rows = await prisma.$queryRaw`
+    INSERT INTO doc_sequences ("tenantId", "docType", period, "lastSeq", "updatedAt")
+    VALUES (${tenantId}, ${docType}, ${period}, 1, NOW())
+    ON CONFLICT ("tenantId", "docType", period)
+    DO UPDATE SET "lastSeq" = doc_sequences."lastSeq" + 1, "updatedAt" = NOW()
+    RETURNING "lastSeq"`;
+  const seq = Number(rows[0].lastSeq);
+  return `${prefix}${period}${String(seq).padStart(3, '0')}`;
+}
+
+// Immutable snapshot of the voucher at the moment the invoice is (re)built.
+function invoiceSnapshot(v) {
+  return {
+    voucherNo: v.voucherNo, type: v.type, status: v.status, hcn: v.hcn || null,
+    companyName: v.companyName || null,
+    firstName: v.firstName, lastName: v.lastName,
+    mobile: v.mobile, whatsapp: v.whatsapp || null, passport: v.passport,
+    trips: Array.isArray(v.trips) ? v.trips : null,
+    // legacy single-trip fallback fields
+    hotelName: v.hotelName, checkInDate: v.checkInDate, checkOutDate: v.checkOutDate, perNightPrice: v.perNightPrice,
+    vehicleType: v.vehicleType, pickupLocation: v.pickupLocation, dropoffLocation: v.dropoffLocation,
+    travelDate: v.travelDate, passengerCount: v.passengerCount, transportPrice: v.transportPrice,
+  };
+}
+
+// Create (or, for an existing ACTIVE Proforma, refresh) the invoice for a voucher.
+// Idempotent: one ACTIVE invoice per (voucher, docType). Best-effort — a failure
+// here must never block voucher create/confirm, so callers wrap in try/catch.
+async function upsertInvoice(voucher, docType, userId) {
+  const tenantId = voucher.tenantId;
+  const fin = await getTenantFinancials(tenantId);
+  const rate = voucher.vatRate != null ? Number(voucher.vatRate) : fin.vatRate;
+  const subtotal = Number(voucher.totalValue || 0);
+  const vatAmount = +(subtotal * rate).toFixed(2);
+  const grandTotal = +(subtotal + vatAmount).toFixed(2);
+  const snapshot = invoiceSnapshot(voucher);
+
+  const existing = await prisma.voucherInvoice.findFirst({ where: { voucherId: voucher.id, docType, status: 'ACTIVE' } });
+  if (existing) {
+    await prisma.voucherInvoice.updateMany({
+      where: { id: existing.id },
+      data: { subtotal, vatRate: rate, vatAmount, grandTotal, currency: fin.currency, snapshot, updatedAt: new Date() },
+    });
+    return existing.id;
+  }
+  const number = await nextInvoiceNumber(tenantId, docType);
+  const inv = await prisma.voucherInvoice.create({
+    data: { tenantId, voucherId: voucher.id, docType, number, subtotal, vatRate: rate, vatAmount, grandTotal, currency: fin.currency, snapshot, createdById: userId || null },
+  });
+  return inv.id;
 }
 
 // ── ZATCA Phase-1 QR (TLV/base64) with explicit total + VAT ───────────────────
@@ -227,7 +289,11 @@ const create = async (req, res, next) => {
       ...typeColumns(type, req.body),
     };
     const voucher = await prisma.formVoucher.create({ data });
-    res.status(201).json(voucher);
+    // Auto-generate the Proforma invoice for the tentative voucher (best-effort).
+    let proformaInvoiceId = null;
+    try { proformaInvoiceId = await upsertInvoice(voucher, 'PROFORMA', req.user.id); }
+    catch (e) { console.error('[voucher] proforma generation failed:', e.message); }
+    res.status(201).json({ ...voucher, proformaInvoiceId });
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Duplicate voucher number — please retry' });
     next(err);
@@ -263,6 +329,9 @@ const update = async (req, res, next) => {
       },
     });
     const updated = await prisma.formVoucher.findFirst({ where: { id: req.params.id } });
+    // Keep the Proforma invoice in sync with the edited (still-tentative) voucher.
+    try { await upsertInvoice(updated, 'PROFORMA', req.user.id); }
+    catch (e) { console.error('[voucher] proforma refresh failed:', e.message); }
     res.json(updated);
   } catch (err) { next(err); }
 };
@@ -270,9 +339,11 @@ const update = async (req, res, next) => {
 // ── Confirm — Tentative → Confirmed (one-way; not from Cancelled) ─────────────
 const confirm = async (req, res, next) => {
   try {
-    const { hcn } = req.body;
-    if (!hcn || !ALPHANUM.test(String(hcn).trim())) {
-      return res.status(400).json({ error: 'HCN # is required and must be alphanumeric' });
+    // HCN # is OPTIONAL. When supplied it must be alphanumeric; confirmation is
+    // what finalizes the voucher and unlocks payment — not the HCN.
+    const rawHcn = req.body.hcn != null ? String(req.body.hcn).trim() : '';
+    if (rawHcn && !ALPHANUM.test(rawHcn)) {
+      return res.status(400).json({ error: 'HCN # must be alphanumeric' });
     }
     const v = await prisma.formVoucher.findFirst({ where: { id: req.params.id } });
     if (!v) return res.status(404).json({ error: 'Voucher not found' });
@@ -280,9 +351,14 @@ const confirm = async (req, res, next) => {
     if (v.status === 'CANCELLED') return res.status(409).json({ error: 'A cancelled voucher cannot be confirmed' });
     await prisma.formVoucher.updateMany({
       where: { id: req.params.id },
-      data: { status: 'CONFIRMED', hcn: String(hcn).trim(), confirmedAt: new Date(), confirmedById: req.user.id, modifiedById: req.user.id, updatedAt: new Date() },
+      data: { status: 'CONFIRMED', hcn: rawHcn || null, confirmedAt: new Date(), confirmedById: req.user.id, modifiedById: req.user.id, updatedAt: new Date() },
     });
-    res.json(await prisma.formVoucher.findFirst({ where: { id: req.params.id } }));
+    const confirmed = await prisma.formVoucher.findFirst({ where: { id: req.params.id } });
+    // Issue the Actual (tax) invoice on confirmation (best-effort).
+    let actualInvoiceId = null;
+    try { actualInvoiceId = await upsertInvoice(confirmed, 'ACTUAL', req.user.id); }
+    catch (e) { console.error('[voucher] actual invoice generation failed:', e.message); }
+    res.json({ ...confirmed, actualInvoiceId });
   } catch (err) { next(err); }
 };
 
@@ -302,84 +378,149 @@ const cancel = async (req, res, next) => {
 
 const remove = async (req, res, next) => {
   try {
-    const result = await prisma.formVoucher.deleteMany({ where: { id: req.params.id } });
-    if (result.count === 0) return res.status(404).json({ error: 'Voucher not found' });
+    const v = await prisma.formVoucher.findFirst({ where: { id: req.params.id } });
+    if (!v) return res.status(404).json({ error: 'Voucher not found' });
+    // A confirmed voucher is a finalized, invoiced record — it cannot be deleted.
+    if (v.status === 'CONFIRMED') {
+      return res.status(409).json({ error: 'Confirmed vouchers cannot be deleted. Cancel it instead.' });
+    }
+    // Invoices cascade-delete via FK ON DELETE CASCADE.
+    await prisma.formVoucher.deleteMany({ where: { id: req.params.id } });
     res.json({ message: 'Voucher deleted' });
   } catch (err) { next(err); }
 };
 
-// ── Printable HTML voucher with VAT breakdown + ZATCA QR ──────────────────────
-const printHtml = async (req, res, next) => {
+// ── Record a payment on a (confirmed) direct voucher — audited, write-once ─────
+const recordPayment = async (req, res, next) => {
   try {
+    const { method, reference } = req.body;
     const v = await prisma.formVoucher.findFirst({ where: { id: req.params.id } });
-    if (!v) return res.status(404).send('<h1>Voucher not found</h1>');
+    if (!v) return res.status(404).json({ error: 'Voucher not found' });
+    if (v.status !== 'CONFIRMED') return res.status(409).json({ error: 'Only confirmed vouchers can receive payment' });
+    if (v.paymentStatus === 'PAID') return res.status(409).json({ error: 'This voucher is already marked paid' });
+    if (!method || !String(method).trim()) return res.status(400).json({ error: 'Payment method is required' });
 
-    const tenant = req.user.tenantId
-      ? await prisma.tenant.findFirst({ where: { id: req.user.tenantId }, select: { name: true, vatNumber: true, crNumber: true, address: true, city: true, country: true, logoUrl: true, contactPhone: true, contactEmail: true } }).catch(() => null)
-      : null;
-    const fin = await getTenantFinancials(v.tenantId);
-    // Prefer the snapshot rate stored on the voucher; fall back to current config.
-    const vatRate = v.vatRate != null ? Number(v.vatRate) : fin.vatRate;
-    const currency = fin.currency;
+    await prisma.formVoucher.updateMany({
+      where: { id: req.params.id },
+      data: { paymentStatus: 'PAID', paidAt: new Date(), paymentMethod: String(method).trim(), paymentRef: reference ? String(reference).trim() : null, updatedAt: new Date() },
+    });
+    // Immutable audit trail of the payment-status change.
+    try {
+      await prisma.auditLog.create({
+        data: {
+          tenantId: v.tenantId, userId: req.user.id,
+          action: 'voucher.payment_recorded', entityType: 'form_voucher', entityId: v.id,
+          payload: JSON.stringify({ voucherNo: v.voucherNo, amount: Number(v.totalValue || 0), method: String(method).trim(), reference: reference || null }),
+          ipAddress: req.ip, userAgent: req.headers['user-agent'] || null,
+        },
+      });
+    } catch { /* audit best-effort */ }
+    res.json(await prisma.formVoucher.findFirst({ where: { id: req.params.id } }));
+  } catch (err) { next(err); }
+};
 
-    const brand = tenant?.name || 'Safre Manasik';
-    const accent = '#1B4B35';
-    const rawLogo = tenant?.logoUrl || '';
-    const logoUrl = rawLogo ? (/^https?:\/\//i.test(rawLogo) ? rawLogo : `https://app.safremanasik.com${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`) : '';
-    const addressLine = [tenant?.address, tenant?.city, tenant?.country].filter(Boolean).join(', ');
+// ── Invoices for a voucher ────────────────────────────────────────────────────
+const listInvoices = async (req, res, next) => {
+  try {
+    const invoices = await prisma.voucherInvoice.findMany({
+      where: { voucherId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, docType: true, number: true, status: true, grandTotal: true, currency: true, createdAt: true, cancelledAt: true },
+    });
+    res.json(invoices);
+  } catch (err) { next(err); }
+};
 
-    const isConfirmed = v.status === 'CONFIRMED';
-    const isCancelled = v.status === 'CANCELLED';
-    const statusColor = isCancelled ? '#9CA3AF' : (isConfirmed ? '#1B4B35' : '#B8860B');
+const cancelInvoice = async (req, res, next) => {
+  try {
+    const inv = await prisma.voucherInvoice.findFirst({ where: { id: req.params.invoiceId } });
+    if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+    if (inv.status === 'CANCELLED') return res.status(409).json({ error: 'Invoice is already cancelled' });
+    await prisma.voucherInvoice.updateMany({ where: { id: inv.id }, data: { status: 'CANCELLED', cancelledAt: new Date(), updatedAt: new Date() } });
+    res.json({ message: 'Invoice cancelled' });
+  } catch (err) { next(err); }
+};
 
-    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
-    const fmtMoney = (n) => `${currency} ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+const deleteInvoice = async (req, res, next) => {
+  try {
+    const result = await prisma.voucherInvoice.deleteMany({ where: { id: req.params.invoiceId } });
+    if (result.count === 0) return res.status(404).json({ error: 'Invoice not found' });
+    res.json({ message: 'Invoice deleted' });
+  } catch (err) { next(err); }
+};
 
-    // VAT math: entered prices are the base (excl. VAT); VAT is added on top.
-    const subtotal = Number(v.totalValue || 0);
-    const vatAmount = +(subtotal * vatRate).toFixed(2);
-    const grandTotal = +(subtotal + vatAmount).toFixed(2);
-    const vatPctNum = vatRate * 100;
-    const vatPctStr = Number.isInteger(vatPctNum) ? String(vatPctNum) : vatPctNum.toFixed(2);
+// ── Shared print helpers ──────────────────────────────────────────────────────
+const fmtDateLong = (d) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+const moneyFmt = (currency) => (n) => `${currency} ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
-    const qrDataUrl = await zatcaQrDataUrl({ sellerName: brand, vatNumber: tenant?.vatNumber, totalWithVat: grandTotal, vatAmount });
+async function loadTenantBrand(tenantId) {
+  const tenant = tenantId
+    ? await prisma.tenant.findFirst({ where: { id: tenantId }, select: { name: true, vatNumber: true, crNumber: true, address: true, city: true, country: true, logoUrl: true, contactPhone: true, contactEmail: true } }).catch(() => null)
+    : null;
+  const brand = tenant?.name || 'Safre Manasik';
+  const rawLogo = tenant?.logoUrl || '';
+  const logoUrl = rawLogo ? (/^https?:\/\//i.test(rawLogo) ? rawLogo : `https://app.safremanasik.com${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`) : '';
+  const addressLine = [tenant?.address, tenant?.city, tenant?.country].filter(Boolean).join(', ');
+  return { tenant, brand, logoUrl, addressLine };
+}
 
-    // ── Service details table (hotel or transport, multi-trip) ───────────────
-    let detailsTable;
-    if (v.type === 'HOTEL') {
-      const trips = Array.isArray(v.trips) && v.trips.length ? v.trips
-        : (v.hotelName ? [{ hotelName: v.hotelName, checkInDate: v.checkInDate, checkOutDate: v.checkOutDate, perNightPrice: v.perNightPrice, nights: nightsBetween(v.checkInDate, v.checkOutDate), lineTotal: subtotal }] : []);
-      detailsTable = `<table style="margin-top:8px">
-        <thead><tr><th style="width:28px">#</th><th>Hotel</th><th>Check-in</th><th>Check-out</th>
-          <th style="text-align:center">Nights</th><th style="text-align:right">Per-night</th><th style="text-align:right">Line Total</th></tr></thead>
-        <tbody>${trips.map((t, i) => `<tr>
-            <td>${i + 1}</td><td>${esc(t.hotelName)}</td><td>${fmtDate(t.checkInDate)}</td><td>${fmtDate(t.checkOutDate)}</td>
-            <td style="text-align:center">${t.nights ?? nightsBetween(t.checkInDate, t.checkOutDate)}</td>
-            <td style="text-align:right">${fmtMoney(t.perNightPrice)}</td>
-            <td style="text-align:right">${fmtMoney(t.lineTotal ?? (Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate)) * Number(t.perNightPrice || 0)))}</td></tr>`).join('')}
-          <tr><td colspan="6" style="text-align:right;font-weight:700;border-top:2px solid ${accent}">Subtotal</td>
-              <td style="text-align:right;font-weight:800;color:${accent};border-top:2px solid ${accent}">${fmtMoney(subtotal)}</td></tr>
-        </tbody></table>`;
-    } else {
-      const trips = Array.isArray(v.trips) && v.trips.length ? v.trips
-        : (v.vehicleType ? [{ vehicleType: v.vehicleType, pickupLocation: v.pickupLocation, dropoffLocation: v.dropoffLocation, travelDate: v.travelDate, passengerCount: v.passengerCount, price: v.transportPrice, lineTotal: subtotal }] : []);
-      detailsTable = `<table style="margin-top:8px">
-        <thead><tr><th style="width:28px">#</th><th>Vehicle</th><th>Route</th><th>Travel Date</th>
-          <th style="text-align:center">Pax</th><th style="text-align:right">Price</th></tr></thead>
-        <tbody>${trips.map((t, i) => `<tr>
-            <td>${i + 1}</td><td>${esc(t.vehicleType)}</td><td>${esc(t.pickupLocation)} → ${esc(t.dropoffLocation)}</td>
-            <td>${fmtDate(t.travelDate)}</td><td style="text-align:center">${t.passengerCount || '—'}</td>
-            <td style="text-align:right">${fmtMoney(t.price ?? t.lineTotal)}</td></tr>`).join('')}
-          <tr><td colspan="5" style="text-align:right;font-weight:700;border-top:2px solid ${accent}">Subtotal</td>
-              <td style="text-align:right;font-weight:800;color:${accent};border-top:2px solid ${accent}">${fmtMoney(subtotal)}</td></tr>
-        </tbody></table>`;
-    }
-    const tripCount = Array.isArray(v.trips) ? v.trips.length : 1;
+function brandHeaderInner({ brand, logoUrl, addressLine, tenant, accent }) {
+  return `<div style="display:flex;align-items:center;gap:12px">
+      ${logoUrl ? `<img src="${esc(logoUrl)}" alt="${esc(brand)}" style="height:56px;max-width:160px;object-fit:contain"/>` : ''}
+      <div>
+        <div class="brand" style="font-size:22px;font-weight:800;color:${accent}">${esc(brand)}</div>
+        ${addressLine ? `<div style="font-size:10px;color:#64748b;margin-top:2px">${esc(addressLine)}</div>` : ''}
+        <div style="font-size:10px;color:#64748b">${tenant?.crNumber ? `CR No. ${esc(tenant.crNumber)}` : ''}${tenant?.crNumber && tenant?.vatNumber ? ' · ' : ''}${tenant?.vatNumber ? `VAT No. ${esc(tenant.vatNumber)}` : ''}</div>
+        ${(tenant?.contactPhone || tenant?.contactEmail) ? `<div style="font-size:10px;color:#64748b">${esc(tenant.contactPhone || '')}${tenant?.contactPhone && tenant?.contactEmail ? ' · ' : ''}${esc(tenant.contactEmail || '')}</div>` : ''}
+      </div>
+    </div>`;
+}
 
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<title>${esc(v.voucherNo)} — ${v.type} Voucher</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
+// Customer + service-details tables. showPrices=false omits all monetary columns
+// (used on the voucher, which must NOT reveal pricing).
+function partyAndServiceTables(v, { accent, currency, showPrices }) {
+  const fmtMoney = moneyFmt(currency);
+  const subtotal = Number(v.totalValue || 0);
+  let detailsTable;
+  if (v.type === 'HOTEL') {
+    const trips = Array.isArray(v.trips) && v.trips.length ? v.trips
+      : (v.hotelName ? [{ hotelName: v.hotelName, checkInDate: v.checkInDate, checkOutDate: v.checkOutDate, perNightPrice: v.perNightPrice, nights: nightsBetween(v.checkInDate, v.checkOutDate), lineTotal: subtotal }] : []);
+    detailsTable = `<table style="margin-top:8px">
+      <thead><tr><th style="width:28px">#</th><th>Hotel</th><th>Check-in</th><th>Check-out</th><th style="text-align:center">Nights</th>
+        ${showPrices ? '<th style="text-align:right">Per-night</th><th style="text-align:right">Line Total</th>' : ''}</tr></thead>
+      <tbody>${trips.map((t, i) => `<tr>
+          <td>${i + 1}</td><td>${esc(t.hotelName)}</td><td>${fmtDateLong(t.checkInDate)}</td><td>${fmtDateLong(t.checkOutDate)}</td>
+          <td style="text-align:center">${t.nights ?? nightsBetween(t.checkInDate, t.checkOutDate)}</td>
+          ${showPrices ? `<td style="text-align:right">${fmtMoney(t.perNightPrice)}</td><td style="text-align:right">${fmtMoney(t.lineTotal ?? (Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate)) * Number(t.perNightPrice || 0)))}</td>` : ''}</tr>`).join('')}
+        ${showPrices ? `<tr><td colspan="6" style="text-align:right;font-weight:700;border-top:2px solid ${accent}">Subtotal</td>
+            <td style="text-align:right;font-weight:800;color:${accent};border-top:2px solid ${accent}">${fmtMoney(subtotal)}</td></tr>` : ''}
+      </tbody></table>`;
+  } else {
+    const trips = Array.isArray(v.trips) && v.trips.length ? v.trips
+      : (v.vehicleType ? [{ vehicleType: v.vehicleType, pickupLocation: v.pickupLocation, dropoffLocation: v.dropoffLocation, travelDate: v.travelDate, passengerCount: v.passengerCount, price: v.transportPrice, lineTotal: subtotal }] : []);
+    detailsTable = `<table style="margin-top:8px">
+      <thead><tr><th style="width:28px">#</th><th>Vehicle</th><th>Route</th><th>Travel Date</th><th style="text-align:center">Pax</th>
+        ${showPrices ? '<th style="text-align:right">Price</th>' : ''}</tr></thead>
+      <tbody>${trips.map((t, i) => `<tr>
+          <td>${i + 1}</td><td>${esc(t.vehicleType)}</td><td>${esc(t.pickupLocation)} → ${esc(t.dropoffLocation)}</td>
+          <td>${fmtDateLong(t.travelDate)}</td><td style="text-align:center">${t.passengerCount || '—'}</td>
+          ${showPrices ? `<td style="text-align:right">${fmtMoney(t.price ?? t.lineTotal)}</td>` : ''}</tr>`).join('')}
+        ${showPrices ? `<tr><td colspan="5" style="text-align:right;font-weight:700;border-top:2px solid ${accent}">Subtotal</td>
+            <td style="text-align:right;font-weight:800;color:${accent};border-top:2px solid ${accent}">${fmtMoney(subtotal)}</td></tr>` : ''}
+      </tbody></table>`;
+  }
+  const customerTable = `<table>
+    ${v.companyName ? `<tr><td class="l">Company</td><td class="v">${esc(v.companyName)}</td></tr>` : ''}
+    <tr><td class="l">Name</td><td class="v">${esc(v.firstName)} ${esc(v.lastName)}</td></tr>
+    <tr><td class="l">Mobile</td><td class="v">${esc(v.mobile)}</td></tr>
+    ${v.whatsapp ? `<tr><td class="l">WhatsApp</td><td class="v">${esc(v.whatsapp)}</td></tr>` : ''}
+    <tr><td class="l">Passport #</td><td class="v">${esc(v.passport)}</td></tr>
+  </table>`;
+  return { customerTable, detailsTable };
+}
+
+function baseCss(accent, statusColor) {
+  return `*{margin:0;padding:0;box-sizing:border-box}
   body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;background:#fff;font-size:13px}
   .page{max-width:800px;margin:18px auto;padding:0 18px}
   .no-print{text-align:right;margin-bottom:8px}
@@ -388,7 +529,6 @@ const printHtml = async (req, res, next) => {
   .strip{background:#0D2B1A;color:#fff;padding:8px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:5px 5px 0 0}
   .strip .t{font-weight:800;letter-spacing:2px;color:#C9A227}
   .hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border:1px solid #e2e8f0;border-top:none}
-  .brand{font-size:22px;font-weight:800;color:${accent}}
   .badge{padding:5px 16px;border-radius:4px;font-weight:800;letter-spacing:2px;color:#fff;background:${statusColor}}
   h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#fff;background:${statusColor};padding:5px 10px;margin:16px 0 8px;border-radius:3px}
   table{width:100%;border-collapse:collapse}
@@ -396,6 +536,7 @@ const printHtml = async (req, res, next) => {
   td{padding:6px 10px;border-bottom:1px solid #eef2f6;font-size:12px}
   td.l{color:#64748b;font-weight:600;width:38%}
   td.v{font-weight:600}
+  .pill{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:800;font-size:11px;letter-spacing:1px}
   .bottom{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;margin-top:16px}
   .amount{background:linear-gradient(135deg,#0D2B1A,#1B4B35);color:#fff;padding:14px 18px;border-radius:6px}
   .amount .lab{font-size:12px;color:rgba(255,255,255,.8);font-weight:700;margin-bottom:8px}
@@ -404,8 +545,31 @@ const printHtml = async (req, res, next) => {
   .qr{text-align:center;border:1.5px solid #e2e8f0;border-radius:6px;padding:8px;background:#fafafa;min-width:140px}
   .qr .qt{font-size:8px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
   .terms{margin-top:16px;font-size:10px;color:#94a3b8;padding:8px 10px;background:#f8fafc;border-radius:4px;border-left:3px solid ${statusColor};line-height:1.5}
-  @media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-</style></head>
+  @media print{.no-print{display:none}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}`;
+}
+
+// ── Printable HTML voucher — service confirmation, NO pricing, shows payment ──
+const printHtml = async (req, res, next) => {
+  try {
+    const v = await prisma.formVoucher.findFirst({ where: { id: req.params.id } });
+    if (!v) return res.status(404).send('<h1>Voucher not found</h1>');
+
+    const { tenant, brand, logoUrl, addressLine } = await loadTenantBrand(req.user.tenantId);
+    const fin = await getTenantFinancials(v.tenantId);
+    const currency = fin.currency;
+    const accent = '#1B4B35';
+    const isConfirmed = v.status === 'CONFIRMED';
+    const isCancelled = v.status === 'CANCELLED';
+    const statusColor = isCancelled ? '#9CA3AF' : (isConfirmed ? '#1B4B35' : '#B8860B');
+    const isPaid = v.paymentStatus === 'PAID';
+    const payColor = isPaid ? '#1B4B35' : '#B91C1C';
+
+    const { customerTable, detailsTable } = partyAndServiceTables(v, { accent, currency, showPrices: false });
+    const tripCount = Array.isArray(v.trips) ? v.trips.length : 1;
+
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>${esc(v.voucherNo)} — ${v.type} Voucher</title>
+<style>${baseCss(accent, statusColor)}</style></head>
 <body>
 <div class="watermark">${v.status}</div>
 <div class="page">
@@ -415,39 +579,108 @@ const printHtml = async (req, res, next) => {
     <span>Voucher No: <strong style="color:#C9A227">${esc(v.voucherNo)}</strong></span>
   </div>
   <div class="hdr">
-    <div style="display:flex;align-items:center;gap:12px">
-      ${logoUrl ? `<img src="${esc(logoUrl)}" alt="${esc(brand)}" style="height:56px;max-width:160px;object-fit:contain"/>` : ''}
-      <div>
-        <div class="brand">${esc(brand)}</div>
-        ${addressLine ? `<div style="font-size:10px;color:#64748b;margin-top:2px">${esc(addressLine)}</div>` : ''}
-        <div style="font-size:10px;color:#64748b">${tenant?.crNumber ? `CR No. ${esc(tenant.crNumber)}` : ''}${tenant?.crNumber && tenant?.vatNumber ? ' · ' : ''}${tenant?.vatNumber ? `VAT No. ${esc(tenant.vatNumber)}` : ''}</div>
-        ${(tenant?.contactPhone || tenant?.contactEmail) ? `<div style="font-size:10px;color:#64748b">${esc(tenant.contactPhone || '')}${tenant?.contactPhone && tenant?.contactEmail ? ' · ' : ''}${esc(tenant.contactEmail || '')}</div>` : ''}
-      </div>
-    </div>
+    ${brandHeaderInner({ brand, logoUrl, addressLine, tenant, accent })}
     <div style="text-align:right">
       <div class="badge">${v.status}</div>
+      <div style="margin-top:6px"><span class="pill" style="background:${payColor};color:#fff">${isPaid ? 'PAID' : 'UNPAID'}</span></div>
       <div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.6">
-        Issued: ${fmtDate(v.createdAt)}<br>
-        ${isConfirmed ? `Confirmed: ${fmtDate(v.confirmedAt)}<br>HCN #: <strong>${esc(v.hcn)}</strong>` : (isCancelled ? 'This voucher has been cancelled' : 'Status pending confirmation')}
+        Issued: ${fmtDateLong(v.createdAt)}<br>
+        ${isConfirmed ? `Confirmed: ${fmtDateLong(v.confirmedAt)}${v.hcn ? `<br>HCN #: <strong>${esc(v.hcn)}</strong>` : ''}` : (isCancelled ? 'This voucher has been cancelled' : 'Status pending confirmation')}
       </div>
     </div>
   </div>
 
   <h3>Customer</h3>
-  <table>
-    ${v.companyName ? `<tr><td class="l">Company</td><td class="v">${esc(v.companyName)}</td></tr>` : ''}
-    <tr><td class="l">Name</td><td class="v">${esc(v.firstName)} ${esc(v.lastName)}</td></tr>
-    <tr><td class="l">Mobile</td><td class="v">${esc(v.mobile)}</td></tr>
-    ${v.whatsapp ? `<tr><td class="l">WhatsApp</td><td class="v">${esc(v.whatsapp)}</td></tr>` : ''}
-    <tr><td class="l">Passport #</td><td class="v">${esc(v.passport)}</td></tr>
-  </table>
+  ${customerTable}
 
   <h3>${v.type === 'HOTEL' ? 'Hotel Details' : 'Transport Details'}${tripCount > 1 ? ` — ${tripCount} Trips` : ''}</h3>
   ${detailsTable}
 
+  <h3>Payment</h3>
+  <table>
+    <tr><td class="l">Payment Status</td><td class="v" style="color:${payColor};font-weight:800">${isPaid ? 'PAID' : 'UNPAID'}</td></tr>
+    ${isPaid ? `<tr><td class="l">Paid On</td><td class="v">${fmtDateLong(v.paidAt)}</td></tr>
+    ${v.paymentMethod ? `<tr><td class="l">Method</td><td class="v">${esc(v.paymentMethod)}</td></tr>` : ''}
+    ${v.paymentRef ? `<tr><td class="l">Reference</td><td class="v">${esc(v.paymentRef)}</td></tr>` : ''}` : ''}
+  </table>
+
+  <div class="terms">
+    <strong>Terms &amp; Conditions:</strong> ${esc(fin.terms)}
+    <br>${isCancelled
+      ? 'This voucher has been <strong>CANCELLED</strong> and is no longer valid.'
+      : (isConfirmed
+        ? 'All services on this <strong>CONFIRMED</strong> voucher are booked and finalized' + (v.hcn ? ' under HCN # ' + esc(v.hcn) : '') + '.'
+        : 'This is a <strong>TENTATIVE</strong> voucher — services are not finalized until confirmed.')}
+    <br>Pricing is provided separately on the corresponding invoice. Issued by ${esc(brand)}${tenant?.crNumber ? ' · CR No. ' + esc(tenant.crNumber) : ''} · Generated ${fmtDateLong(new Date())}.
+  </div>
+</div>
+</body></html>`;
+    res.set('Content-Type', 'text/html; charset=utf-8').send(html);
+  } catch (err) { next(err); }
+};
+
+// ── Printable invoice (Proforma or Actual) — priced, ZATCA QR, branded ────────
+const invoicePrintHtml = async (req, res, next) => {
+  try {
+    const docType = String(req.params.docType || '').toUpperCase() === 'ACTUAL' ? 'ACTUAL' : 'PROFORMA';
+    const inv = await prisma.voucherInvoice.findFirst({ where: { voucherId: req.params.id, docType, status: 'ACTIVE' }, orderBy: { createdAt: 'desc' } });
+    if (!inv) return res.status(404).send(`<h1>${docType === 'ACTUAL' ? 'Actual' : 'Proforma'} invoice not found</h1><p>It is generated automatically when the voucher is ${docType === 'ACTUAL' ? 'confirmed' : 'created'}.</p>`);
+    const v = await prisma.formVoucher.findFirst({ where: { id: inv.voucherId } });
+    if (!v) return res.status(404).send('<h1>Voucher not found</h1>');
+
+    const { tenant, brand, logoUrl, addressLine } = await loadTenantBrand(req.user.tenantId);
+    const fin = await getTenantFinancials(v.tenantId);
+    const currency = inv.currency || fin.currency;
+    const fmtMoney = moneyFmt(currency);
+    const accent = '#1B4B35';
+    const isProforma = docType === 'PROFORMA';
+    const docTitle = isProforma ? 'PROFORMA INVOICE' : 'TAX INVOICE';
+    const statusColor = isProforma ? '#B8860B' : '#1B4B35';
+
+    const subtotal = Number(inv.subtotal || 0);
+    const vatAmount = Number(inv.vatAmount || 0);
+    const grandTotal = Number(inv.grandTotal || 0);
+    const rate = inv.vatRate != null ? Number(inv.vatRate) : fin.vatRate;
+    const vatPctNum = rate * 100;
+    const vatPctStr = Number.isInteger(vatPctNum) ? String(vatPctNum) : vatPctNum.toFixed(2);
+    const isPaid = v.paymentStatus === 'PAID';
+
+    const qrDataUrl = await zatcaQrDataUrl({ sellerName: brand, vatNumber: tenant?.vatNumber, totalWithVat: grandTotal, vatAmount });
+    const { customerTable, detailsTable } = partyAndServiceTables(v, { accent, currency, showPrices: true });
+    const tripCount = Array.isArray(v.trips) ? v.trips.length : 1;
+
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>${esc(inv.number)} — ${docTitle}</title>
+<style>${baseCss(accent, statusColor)}</style></head>
+<body>
+<div class="watermark">${isProforma ? 'PROFORMA' : 'INVOICE'}</div>
+<div class="page">
+  <div class="no-print"><button class="btn" onclick="window.print()">🖨️ Print Invoice</button></div>
+  <div class="strip">
+    <span class="t">${docTitle}</span>
+    <span>Invoice No: <strong style="color:#C9A227">${esc(inv.number)}</strong></span>
+  </div>
+  <div class="hdr">
+    ${brandHeaderInner({ brand, logoUrl, addressLine, tenant, accent })}
+    <div style="text-align:right">
+      <div class="badge">${isProforma ? 'PROFORMA' : 'TAX INVOICE'}</div>
+      <div style="margin-top:6px"><span class="pill" style="background:${isPaid ? '#1B4B35' : '#B91C1C'};color:#fff">${isPaid ? 'PAID' : 'UNPAID'}</span></div>
+      <div style="font-size:10px;color:#64748b;margin-top:6px;line-height:1.6">
+        Invoice Date: ${fmtDateLong(inv.createdAt)}<br>
+        Ref Voucher: <strong>${esc(v.voucherNo)}</strong>${v.hcn ? `<br>HCN #: <strong>${esc(v.hcn)}</strong>` : ''}
+      </div>
+    </div>
+  </div>
+
+  <h3>Bill To</h3>
+  ${customerTable}
+
+  <h3>${v.type === 'HOTEL' ? 'Hotel Services' : 'Transport Services'}${tripCount > 1 ? ` — ${tripCount} Trips` : ''}</h3>
+  ${detailsTable}
+
   <div class="bottom">
     <div class="amount">
-      <div class="lab">Amount Summary</div>
+      <div class="lab">Invoice Summary</div>
       <div class="row"><span>Amount (excl. VAT)</span><span>${fmtMoney(subtotal)}</span></div>
       <div class="row"><span>VAT (${vatPctStr}%)</span><span>${fmtMoney(vatAmount)}</span></div>
       <div class="row total"><span>Total (incl. VAT)</span><span>${fmtMoney(grandTotal)}</span></div>
@@ -460,19 +693,19 @@ const printHtml = async (req, res, next) => {
   </div>
 
   <div class="terms">
-    <strong>Terms &amp; Conditions:</strong> This voucher is subject to availability and the agency's booking policy.
-    ${isCancelled
-      ? 'This voucher has been <strong>CANCELLED</strong> and is no longer valid.'
-      : (isConfirmed
-        ? 'All services on this <strong>CONFIRMED</strong> voucher are booked and finalized under HCN # ' + esc(v.hcn) + '.'
-        : 'This is a <strong>TENTATIVE</strong> voucher — services are not finalized until confirmed.')}
-    <br>Issued by ${esc(brand)}${tenant?.crNumber ? ' · CR No. ' + esc(tenant.crNumber) : ''} · Generated ${fmtDate(new Date())}.
+    <strong>Terms &amp; Conditions:</strong> ${esc(fin.terms)}
+    <br>${isProforma
+      ? 'This is a <strong>PROFORMA INVOICE</strong> for a tentative booking and is not a valid tax invoice for payment claims.'
+      : 'This is the <strong>TAX INVOICE</strong> for a confirmed booking.'}
+    Issued by ${esc(brand)}${tenant?.crNumber ? ' · CR No. ' + esc(tenant.crNumber) : ''} · Generated ${fmtDateLong(new Date())}.
   </div>
 </div>
 </body></html>`;
-
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   } catch (err) { next(err); }
 };
 
-module.exports = { nextNumber, list, getOne, create, update, confirm, cancel, remove, printHtml };
+module.exports = {
+  nextNumber, list, getOne, create, update, confirm, cancel, remove, printHtml,
+  recordPayment, listInvoices, invoicePrintHtml, cancelInvoice, deleteInvoice,
+};

@@ -1,0 +1,641 @@
+{
+  "results": [
+    {
+      "id": "TC-F01",
+      "category": "Functional",
+      "name": "Super Admin login returns 200 + token",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F02",
+      "category": "Functional",
+      "name": "/me returns SUPER_ADMIN role",
+      "status": "PASS",
+      "expected": "SUPER_ADMIN",
+      "actual": "SUPER_ADMIN",
+      "notes": ""
+    },
+    {
+      "id": "TC-F03",
+      "category": "Functional",
+      "name": "Tenant Admin login returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": "bootstrapped QA tenant"
+    },
+    {
+      "id": "TC-N01",
+      "category": "Negative",
+      "name": "Wrong password returns 401",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "401",
+      "notes": ""
+    },
+    {
+      "id": "TC-N02",
+      "category": "Negative",
+      "name": "Invalid email format returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-N03",
+      "category": "Negative",
+      "name": "Missing password returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-F04",
+      "category": "Functional",
+      "name": "Platform stats returns 200 with stats object",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F04b",
+      "category": "Functional",
+      "name": "Stats contains all expected keys",
+      "status": "PASS",
+      "expected": "all keys present",
+      "actual": "yes",
+      "notes": ""
+    },
+    {
+      "id": "TC-F05",
+      "category": "Functional",
+      "name": "List tenants returns 200 with data array",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F05b",
+      "category": "Functional",
+      "name": "Tenant record has required fields",
+      "status": "PASS",
+      "expected": "all fields",
+      "actual": "yes",
+      "notes": ""
+    },
+    {
+      "id": "TC-F06",
+      "category": "Functional",
+      "name": "Diagnostics returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F06b",
+      "category": "Functional",
+      "name": "Diagnostics has overall + checks array",
+      "status": "PASS",
+      "expected": "overall+checks",
+      "actual": "overall=degraded",
+      "notes": ""
+    },
+    {
+      "id": "TC-F06c",
+      "category": "Functional",
+      "name": "Diagnostics includes sentry.monitoring check",
+      "status": "PASS",
+      "expected": "sentry.monitoring present",
+      "actual": "yes",
+      "notes": ""
+    },
+    {
+      "id": "TC-F07",
+      "category": "Functional",
+      "name": "List applications returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F08a",
+      "category": "Functional",
+      "name": "Suspend tenant returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F08b",
+      "category": "Functional",
+      "name": "Activate tenant returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-N04",
+      "category": "Negative",
+      "name": "Unauthenticated access to super-admin returns 401",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "401",
+      "notes": ""
+    },
+    {
+      "id": "TC-N05",
+      "category": "Negative",
+      "name": "Invalid tenant ID returns 4xx/5xx",
+      "status": "PASS",
+      "expected": "400/404/500",
+      "actual": "404",
+      "notes": ""
+    },
+    {
+      "id": "TC-F29",
+      "category": "Functional",
+      "name": "Tenant signup returns 2xx (202=PENDING)",
+      "status": "PASS",
+      "expected": "200/201/202",
+      "actual": "202",
+      "notes": ""
+    },
+    {
+      "id": "TC-N18",
+      "category": "Negative",
+      "name": "Signup without tenantName returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-N19",
+      "category": "Negative",
+      "name": "Signup with short password returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-F09",
+      "category": "Functional",
+      "name": "List packages returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F10",
+      "category": "Functional",
+      "name": "Create package returns 201",
+      "status": "PASS",
+      "expected": "201",
+      "actual": "201",
+      "notes": ""
+    },
+    {
+      "id": "TC-F11",
+      "category": "Functional",
+      "name": "Get package by ID returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F12",
+      "category": "Functional",
+      "name": "Update package returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-N06",
+      "category": "Negative",
+      "name": "Package creation without name returns 400/422",
+      "status": "PASS",
+      "expected": "400/422",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-N07",
+      "category": "Negative",
+      "name": "AGENT cannot create package → 403",
+      "status": "SKIP",
+      "expected": "403",
+      "actual": "N/A",
+      "notes": "No agent token"
+    },
+    {
+      "id": "TC-F13",
+      "category": "Functional",
+      "name": "List bookings returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F14",
+      "category": "Functional",
+      "name": "Create booking returns 201",
+      "status": "PASS",
+      "expected": "201",
+      "actual": "201",
+      "notes": ""
+    },
+    {
+      "id": "TC-F15",
+      "category": "Functional",
+      "name": "Get booking by ID returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F16",
+      "category": "Functional",
+      "name": "Update booking status to CONFIRMED returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-N08",
+      "category": "Negative",
+      "name": "Create booking without packageId returns 400/422",
+      "status": "PASS",
+      "expected": "400/422",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-N09",
+      "category": "Negative",
+      "name": "Get non-existent booking returns 404",
+      "status": "PASS",
+      "expected": "404/400",
+      "actual": "404",
+      "notes": ""
+    },
+    {
+      "id": "TC-N10",
+      "category": "Negative",
+      "name": "CUSTOMER cannot create booking → 403",
+      "status": "SKIP",
+      "expected": "403",
+      "actual": "N/A",
+      "notes": "No customer token"
+    },
+    {
+      "id": "TC-F17",
+      "category": "Functional",
+      "name": "List payments returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F18",
+      "category": "Functional",
+      "name": "Record payment returns 201",
+      "status": "PASS",
+      "expected": "201",
+      "actual": "201",
+      "notes": ""
+    },
+    {
+      "id": "TC-F19",
+      "category": "Functional",
+      "name": "Get invoice returns 200 or 404 (may not exist)",
+      "status": "PASS",
+      "expected": "200/404",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F20",
+      "category": "Functional",
+      "name": "Receipt preview returns HTML",
+      "status": "PASS",
+      "expected": "200 + HTML",
+      "actual": "200 / text/html; charset=utf-8",
+      "notes": ""
+    },
+    {
+      "id": "TC-N11",
+      "category": "Negative",
+      "name": "Negative payment amount returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-N12",
+      "category": "Negative",
+      "name": "Payment without bookingId returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-N13",
+      "category": "Negative",
+      "name": "Payment without method returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-F21",
+      "category": "Functional",
+      "name": "List vouchers returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F22",
+      "category": "Functional",
+      "name": "Generate CONFIRMED voucher returns 200",
+      "status": "PASS",
+      "expected": "200/201",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F23",
+      "category": "Functional",
+      "name": "Voucher preview returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F24",
+      "category": "Functional",
+      "name": "Download voucher returns 200 (PDF or HTML)",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-N14",
+      "category": "Negative",
+      "name": "Voucher without bookingId returns 400 or 403 (feature gate)",
+      "status": "PASS",
+      "expected": "400/403",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-N15",
+      "category": "Negative",
+      "name": "Voucher with invalid type returns 400",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-F25",
+      "category": "Functional",
+      "name": "List users (ADMIN) returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F26",
+      "category": "Functional",
+      "name": "List customers returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F27",
+      "category": "Functional",
+      "name": "List agents returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-F28",
+      "category": "Functional",
+      "name": "Create user returns 201",
+      "status": "PASS",
+      "expected": "201",
+      "actual": "201",
+      "notes": ""
+    },
+    {
+      "id": "TC-N16",
+      "category": "Negative",
+      "name": "Duplicate email returns 409/400",
+      "status": "PASS",
+      "expected": "400/409",
+      "actual": "409",
+      "notes": ""
+    },
+    {
+      "id": "TC-N17",
+      "category": "Negative",
+      "name": "Create user without email returns 400/422",
+      "status": "PASS",
+      "expected": "400/422",
+      "actual": "400",
+      "notes": ""
+    },
+    {
+      "id": "TC-F30",
+      "category": "Functional",
+      "name": "Dashboard stats returns 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-N20",
+      "category": "Negative",
+      "name": "Tampered JWT returns 401",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "401",
+      "notes": ""
+    },
+    {
+      "id": "TC-T01",
+      "category": "Technical",
+      "name": "API returns JSON content-type on error responses",
+      "status": "PASS",
+      "expected": "application/json",
+      "actual": "application/json; charset=utf-8",
+      "notes": ""
+    },
+    {
+      "id": "TC-T02",
+      "category": "Technical",
+      "name": "CORS headers present on OPTIONS request",
+      "status": "PASS",
+      "expected": "CORS headers",
+      "actual": "present",
+      "notes": ""
+    },
+    {
+      "id": "TC-T03",
+      "category": "Technical",
+      "name": "GET /health responds (200 or 404 both acceptable)",
+      "status": "PASS",
+      "expected": "200/404",
+      "actual": "404",
+      "notes": ""
+    },
+    {
+      "id": "TC-T04",
+      "category": "Technical",
+      "name": "Protected route without token returns 401",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "401",
+      "notes": ""
+    },
+    {
+      "id": "TC-T05",
+      "category": "Technical",
+      "name": "JWT token has correct 3-part format",
+      "status": "PASS",
+      "expected": "3 parts",
+      "actual": "3 parts",
+      "notes": ""
+    },
+    {
+      "id": "TC-T06",
+      "category": "Technical",
+      "name": "Diagnostics: database.connection = pass",
+      "status": "PASS",
+      "expected": "pass",
+      "actual": "pass",
+      "notes": ""
+    },
+    {
+      "id": "TC-T07",
+      "category": "Technical",
+      "name": "Diagnostics: super_admin.exists = pass",
+      "status": "PASS",
+      "expected": "pass",
+      "actual": "pass",
+      "notes": ""
+    },
+    {
+      "id": "TC-T08",
+      "category": "Technical",
+      "name": "Diagnostics: plan_configs.seeded = pass",
+      "status": "PASS",
+      "expected": "pass",
+      "actual": "pass",
+      "notes": ""
+    },
+    {
+      "id": "TC-T09",
+      "category": "Technical",
+      "name": "SA token on tenant-scoped route returns 403/200 (not crash)",
+      "status": "PASS",
+      "expected": "200/403/401",
+      "actual": "200",
+      "notes": ""
+    },
+    {
+      "id": "TC-T10",
+      "category": "Technical",
+      "name": "Platform stats response time < 5000ms",
+      "status": "PASS",
+      "expected": "<5000ms",
+      "actual": "342ms",
+      "notes": ""
+    },
+    {
+      "id": "TC-T11",
+      "category": "Technical",
+      "name": "Diagnostics response time < 10000ms",
+      "status": "PASS",
+      "expected": "<10000ms",
+      "actual": "446ms",
+      "notes": ""
+    },
+    {
+      "id": "TC-T12",
+      "category": "Technical",
+      "name": "Overpayment does not crash server (returns 201)",
+      "status": "PASS",
+      "expected": "201",
+      "actual": "201",
+      "notes": ""
+    },
+    {
+      "id": "TC-T13",
+      "category": "Technical",
+      "name": "ZATCA Phase 1 QR code implemented in vouchers",
+      "status": "PASS",
+      "expected": "Implemented",
+      "actual": "Code verified in voucherService.js",
+      "notes": "Verified via code review"
+    },
+    {
+      "id": "TC-T14",
+      "category": "Technical",
+      "name": "ZATCA Phase 1 QR code implemented in receipts",
+      "status": "PASS",
+      "expected": "Implemented",
+      "actual": "Added in this release",
+      "notes": "Verified via code review"
+    },
+    {
+      "id": "TC-T15",
+      "category": "Technical",
+      "name": "sentry.monitoring check exists in diagnostics",
+      "status": "PASS",
+      "expected": "present",
+      "actual": "status=warn",
+      "notes": ""
+    }
+  ],
+  "meta": {
+    "pass": 68,
+    "fail": 0,
+    "skip": 2,
+    "total": 70,
+    "runAt": "2026-05-23T11:06:02.671Z"
+  }
+}

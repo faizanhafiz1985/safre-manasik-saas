@@ -189,9 +189,58 @@ async function ensureVoucherFormTables() {
     await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS trips JSONB`);
     // VAT rate snapshot (from SystemConfig vat_percentage at issue time).
     await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "vatRate" DECIMAL(5,4)`);
-    logger.info('[bootstrap] hotels.pricePerNight + form_vouchers (+trips) table ready');
+    // Payment tracking on direct vouchers (set only via the audited endpoint).
+    await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "paymentStatus" VARCHAR(12) NOT NULL DEFAULT 'UNPAID'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMPTZ`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "paymentMethod" VARCHAR(32)`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "paymentRef" TEXT`);
+    logger.info('[bootstrap] hotels.pricePerNight + form_vouchers (+trips,+payment) table ready');
   } catch (err) {
     logger.error(`[bootstrap] ensureVoucherFormTables failed: ${err.message}`);
+  }
+}
+
+async function ensureInvoiceTables() {
+  try {
+    // Proforma / Actual invoices generated from direct vouchers.
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS voucher_invoices (
+        id            VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"    VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "voucherId"   VARCHAR(36)  NOT NULL REFERENCES form_vouchers(id) ON DELETE CASCADE,
+        "docType"     VARCHAR(12)  NOT NULL,
+        number        VARCHAR(32)  NOT NULL,
+        status        VARCHAR(12)  NOT NULL DEFAULT 'ACTIVE',
+        subtotal      DECIMAL(12,2) NOT NULL DEFAULT 0,
+        "vatRate"     DECIMAL(5,4),
+        "vatAmount"   DECIMAL(12,2) NOT NULL DEFAULT 0,
+        "grandTotal"  DECIMAL(12,2) NOT NULL DEFAULT 0,
+        currency      VARCHAR(8)   NOT NULL DEFAULT 'SAR',
+        snapshot      JSONB,
+        "createdById" VARCHAR(36),
+        "cancelledAt" TIMESTAMPTZ,
+        "createdAt"   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_voucher_invoice_number UNIQUE ("tenantId", number)
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_vi_voucher ON voucher_invoices("voucherId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_vi_tenant_type ON voucher_invoices("tenantId","docType")`);
+
+    // Atomic per-tenant, per-month document number counter.
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS doc_sequences (
+        "tenantId"  VARCHAR(36) NOT NULL,
+        "docType"   VARCHAR(16) NOT NULL,
+        period      VARCHAR(6)  NOT NULL,
+        "lastSeq"   INTEGER     NOT NULL DEFAULT 0,
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("tenantId", "docType", period)
+      )
+    `);
+    logger.info('[bootstrap] voucher_invoices + doc_sequences tables ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensureInvoiceTables failed: ${err.message}`);
   }
 }
 
@@ -372,6 +421,7 @@ async function runBootstrap() {
   await ensurePasswordResetTokensTable();
   await ensureCustomerTables();
   await ensureVoucherFormTables();
+  await ensureInvoiceTables();
   await ensureRbacTables();
   logger.info('[bootstrap] Startup tasks complete.');
 }

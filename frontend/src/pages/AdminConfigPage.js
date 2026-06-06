@@ -14,6 +14,7 @@ const CONFIG_FIELDS = [
   { key: 'currency', label: 'Currency Code (e.g. SAR)', section: 'Financial', currencyField: true },
   { key: 'vat_percentage', label: 'VAT Percentage (%)', section: 'Financial', decimalField: true },
   { key: 'booking_tentative_days', label: 'Tentative Booking Expiry (Days)', section: 'Bookings', integerField: true },
+  { key: 'voucher_terms', label: 'Voucher & Invoice Terms and Conditions', section: 'Vouchers', multiline: true, wide: true, rows: 4 },
 ];
 
 export default function AdminConfigPage() {
@@ -60,12 +61,12 @@ export default function AdminConfigPage() {
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={2}>
                 {CONFIG_FIELDS.filter((f) => f.section === section).map((field) => (
-                  <Grid item xs={12} sm={6} key={field.key}>
+                  <Grid item xs={12} sm={field.wide ? 12 : 6} key={field.key}>
                     <TextField
                       fullWidth
                       label={field.label}
                       multiline={field.multiline}
-                      rows={field.multiline ? 3 : 1}
+                      rows={field.multiline ? (field.rows || 3) : 1}
                       error={!!errors[field.key]}
                       helperText={errors[field.key]?.message}
                       inputProps={{

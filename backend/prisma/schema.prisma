@@ -218,6 +218,7 @@ model Tenant {
   customers          Customer[]
   customerPassengers CustomerPassenger[]
   formVouchers       FormVoucher[]
+  voucherInvoices    VoucherInvoice[]
   tenantRoles        TenantRole[]
   rolePermissions    RolePermission[]
 
@@ -368,6 +369,13 @@ model FormVoucher {
   // Totals + audit trail (user ids — no FK to avoid back-relation churn on User)
   totalValue    Decimal?  @db.Decimal(12, 2)
   vatRate       Decimal?  @db.Decimal(5, 4)  // snapshot of VAT rate at issue (e.g. 0.1500)
+  // Payment tracking (direct-voucher bookings). Status is set only via the
+  // audited recordPayment endpoint — never freely editable.
+  paymentStatus String   @default("UNPAID") // 'UNPAID' | 'PAID'
+  paidAt        DateTime?
+  paymentMethod String?
+  paymentRef    String?
+
   createdById   String?
   confirmedById String?
   modifiedById  String?
@@ -375,12 +383,58 @@ model FormVoucher {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now()) @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoices VoucherInvoice[]
 
   @@unique([tenantId, voucherNo])
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("form_vouchers")
+}
+
+// ─── Direct-voucher invoices: Proforma (tentative) + Actual (confirmed) ───────
+// Auto-generated from a FormVoucher. Proforma is created/refreshed while the
+// voucher is tentative; the Actual (tax) invoice is issued on confirmation.
+// Numbers come from a per-tenant, per-month atomic counter (see DocSequence) and
+// never reset mid-month: SAFPI/SAFAI + YYYY + MM + zero-padded sequence.
+model VoucherInvoice {
+  id          String   @id @default(uuid())
+  tenantId    String
+  voucherId   String
+  docType     String   // 'PROFORMA' | 'ACTUAL'
+  number      String
+  status      String   @default("ACTIVE") // 'ACTIVE' | 'CANCELLED'
+  subtotal    Decimal  @default(0) @db.Decimal(12, 2)
+  vatRate     Decimal? @db.Decimal(5, 4)
+  vatAmount   Decimal  @default(0) @db.Decimal(12, 2)
+  grandTotal  Decimal  @default(0) @db.Decimal(12, 2)
+  currency    String   @default("SAR")
+  snapshot    Json?
+  createdById String?
+  cancelledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  voucher FormVoucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, number])
+  @@index([voucherId])
+  @@index([tenantId, docType])
+  @@map("voucher_invoices")
+}
+
+// Atomic monthly document-number counter. One row per (tenant, docType, period).
+// Incremented via INSERT ... ON CONFLICT so concurrent issues never collide.
+model DocSequence {
+  tenantId  String
+  docType   String
+  period    String   // 'YYYYMM'
+  lastSeq   Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@id([tenantId, docType, period])
+  @@map("doc_sequences")
 }
 
 // ─── RBAC: tenant-defined roles + permission grants ───────────────────────────

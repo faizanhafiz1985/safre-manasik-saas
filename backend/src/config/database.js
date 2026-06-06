@@ -13,6 +13,7 @@ const TENANT_MODELS = new Set([
   'Customer',
   'CustomerPassenger',
   'FormVoucher',
+  'VoucherInvoice',
   'TenantRole',
   'RolePermission',
   'Hotel',
