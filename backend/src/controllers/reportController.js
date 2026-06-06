@@ -69,7 +69,9 @@ const dailySchedule = async (req, res, next) => {
 
     if (!eventType || eventType === 'ALL' || eventType === 'CHECK-IN') {
       for (const b of checkIns) {
-        const hotelEntry = b.package.packageHotels.find((h) => h.city === 'MADINAH') || b.package.packageHotels[0];
+        // Package is optional on a booking — guard against null/empty hotels.
+        const phs = b.package?.packageHotels || [];
+        const hotelEntry = phs.find((h) => h.city === 'MADINAH') || phs[0];
         events.push({
           eventType: 'CHECK-IN',
           time: fmtTime(b.travelDateFrom),
@@ -90,7 +92,8 @@ const dailySchedule = async (req, res, next) => {
 
     if (!eventType || eventType === 'ALL' || eventType === 'CHECK-OUT') {
       for (const b of checkOuts) {
-        const hotelEntry = b.package.packageHotels.find((h) => h.city === 'MAKKAH') || b.package.packageHotels[0];
+        const phs = b.package?.packageHotels || [];
+        const hotelEntry = phs.find((h) => h.city === 'MAKKAH') || phs[0];
         events.push({
           eventType: 'CHECK-OUT',
           time: fmtTime(b.travelDateTo),
