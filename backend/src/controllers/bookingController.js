@@ -97,7 +97,8 @@ const create = async (req, res, next) => {
     const { customerId, agentId, packageId, priceTierId, travelDateFrom, travelDateTo, totalPax, totalAmount, notes, passengers, transports, caterings } = req.body;
 
     if (!customerId) return res.status(400).json({ error: 'Customer is required' });
-    if (!packageId) return res.status(400).json({ error: 'Package is required' });
+    // Package is OPTIONAL — a booking can be ad-hoc (hotel/transport priced
+    // manually via totalAmount) without a packaged product.
     if (!travelDateFrom) return res.status(400).json({ error: 'Departure date is required' });
     if (!travelDateTo) return res.status(400).json({ error: 'Return date is required' });
 
@@ -126,8 +127,8 @@ const create = async (req, res, next) => {
         bookingRef,
         customerId,
         agentId: agentIdFinal,
-        packageId,
-        priceTierId,
+        packageId: packageId || null,
+        priceTierId: packageId ? (priceTierId || null) : null,
         travelDateFrom: dateFrom,
         travelDateTo: dateTo,
         totalPax: pax,

@@ -241,9 +241,11 @@ export default function BookingsPage() {
                 </Typography>
               </Grid>
 
-              {/* Package */}
+              {/* Package (optional) */}
               <Grid item xs={12}>
-                <TextField fullWidth select label="Package *" error={!!errors.packageId} {...register('packageId', { required: true })}>
+                <TextField fullWidth select label="Package (optional)" defaultValue="" error={!!errors.packageId}
+                  helperText="Leave as “None” for an ad-hoc booking; enter the amount manually below." {...register('packageId')}>
+                  <MenuItem value=""><em>None (ad-hoc booking)</em></MenuItem>
                   {packages.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
                 </TextField>
               </Grid>

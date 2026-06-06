@@ -562,7 +562,7 @@ model Booking {
   bookingRef     String        @unique @default(cuid())
   customerId     String
   agentId        String?
-  packageId      String
+  packageId      String?
   priceTierId    String?
   status         BookingStatus @default(TENTATIVE)
   travelDateFrom DateTime
@@ -577,7 +577,7 @@ model Booking {
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer     User               @relation("CustomerBookings", fields: [customerId], references: [id])
   agent        User?              @relation("AgentBookings", fields: [agentId], references: [id])
-  package      Package            @relation(fields: [packageId], references: [id])
+  package      Package?           @relation(fields: [packageId], references: [id])
   passengers   Passenger[]
   transports   BookingTransport[]
   caterings    BookingCatering[]

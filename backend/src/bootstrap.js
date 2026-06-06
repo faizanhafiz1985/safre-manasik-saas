@@ -244,6 +244,16 @@ async function ensureInvoiceTables() {
   }
 }
 
+async function ensureBookingColumns() {
+  try {
+    // Package is now optional on a booking — relax the legacy NOT NULL.
+    await prisma.$executeRawUnsafe(`ALTER TABLE bookings ALTER COLUMN "packageId" DROP NOT NULL`);
+    logger.info('[bootstrap] bookings.packageId is now nullable');
+  } catch (err) {
+    logger.error(`[bootstrap] ensureBookingColumns failed: ${err.message}`);
+  }
+}
+
 async function ensureRbacTables() {
   const { DEFAULT_PERMISSIONS } = require('./config/permissions');
   try {
@@ -422,6 +432,7 @@ async function runBootstrap() {
   await ensureCustomerTables();
   await ensureVoucherFormTables();
   await ensureInvoiceTables();
+  await ensureBookingColumns();
   await ensureRbacTables();
   logger.info('[bootstrap] Startup tasks complete.');
 }
