@@ -31,6 +31,7 @@ router.post('/applications/:id/reject', ctrl.rejectApplication);
 // Diagnostics — read-only system health check, safe to call anytime
 const diagnosticsCtrl = require('../controllers/diagnosticsController');
 router.get('/diagnostics', diagnosticsCtrl.diagnostics);
+router.post('/test-email', diagnosticsCtrl.testEmail);
 
 // Hotel seed — populates Makkah & Madinah hotels for a tenant in one click
 router.post('/seed-hotels', ctrl.seedHotels);

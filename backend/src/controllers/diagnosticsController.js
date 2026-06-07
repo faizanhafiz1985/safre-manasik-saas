@@ -3,7 +3,7 @@
 
 const prisma = require('../config/database');
 const { runWithTenant } = require('../config/tenantContext');
-const { CONFIGURED: SMTP_CONFIGURED } = require('../services/emailService');
+const { CONFIGURED: SMTP_CONFIGURED, sendEmail } = require('../services/emailService');
 const { envConfigured: PAYPAL_PLATFORM_CONFIGURED } = require('../services/paypalClient');
 const os = require('os');
 
@@ -152,4 +152,34 @@ const diagnostics = async (req, res, next) => {
   });
 };
 
-module.exports = { diagnostics };
+// SUPER_ADMIN-only: perform a real send and return the provider's exact result
+// so we can see WHY emails aren't arriving (e.g. unverified domain). No secrets
+// are returned — only whether they're set and a 3-char prefix to identify Resend.
+const testEmail = async (req, res, next) => {
+  try {
+    const to = (req.body && req.body.to && String(req.body.to).trim()) || null;
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'Provide a valid { "to": "address@example.com" }' });
+    }
+    const result = await sendEmail({
+      to,
+      subject: 'Safre Manasik — Email Diagnostic Test',
+      html: '<p>This is a diagnostic test email from Safre Manasik.</p><p>If you received this, outgoing email is working correctly.</p>',
+    });
+    const smtpPass = process.env.SMTP_PASS || '';
+    res.json({
+      requestedTo: to,
+      from: process.env.SMTP_FROM || 'Safre Manasik <noreply@safremanasik.com>',
+      transport: {
+        usingResendHttpApi: !!(process.env.RESEND_API_KEY || smtpPass.startsWith('re_')),
+        smtpHost: process.env.SMTP_HOST || null,
+        smtpUser: process.env.SMTP_USER || null,
+        smtpPassPrefix: smtpPass ? smtpPass.slice(0, 3) : null,
+        resendKeySet: !!process.env.RESEND_API_KEY,
+      },
+      result, // { ok, mode: 'sent'|'logged', error?, id? }
+    });
+  } catch (err) { next(err); }
+};
+
+module.exports = { diagnostics, testEmail };
