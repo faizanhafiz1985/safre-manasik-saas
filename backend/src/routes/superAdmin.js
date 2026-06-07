@@ -33,6 +33,16 @@ const diagnosticsCtrl = require('../controllers/diagnosticsController');
 router.get('/diagnostics', diagnosticsCtrl.diagnostics);
 router.post('/test-email', diagnosticsCtrl.testEmail);
 
+// Platform Cost Monitor (SUPER_ADMIN). Specific paths before the :id param route.
+const costCtrl = require('../controllers/superAdminCostController');
+router.get('/costs/export', costCtrl.exportCsv);
+router.get('/costs', costCtrl.list);
+router.post('/costs', costCtrl.create);
+router.get('/costs/:id/payments', costCtrl.payments);
+router.post('/costs/:id/pay', costCtrl.markPaid);
+router.put('/costs/:id', costCtrl.update);
+router.delete('/costs/:id', costCtrl.remove);
+
 // Hotel seed — populates Makkah & Madinah hotels for a tenant in one click
 router.post('/seed-hotels', ctrl.seedHotels);
 

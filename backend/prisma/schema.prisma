@@ -1283,3 +1283,47 @@ model PasswordResetToken {
   @@index([userId])
   @@map("password_reset_tokens")
 }
+
+// ─── Platform Cost Monitor (SUPER_ADMIN) ─────────────────────────────────────
+// Tracks the SaaS owner's own running costs (Railway, Dynadot, Resend, etc.).
+// Platform-level — NOT tenant-scoped (no tenantId; not in TENANT_MODELS).
+
+model PlatformCost {
+  id              String    @id @default(uuid())
+  name            String
+  category        String?            // Hosting, Domain, Email, Payments, Monitoring, CDN, Code
+  url             String?
+  monthlyCost     Decimal   @default(0) @db.Decimal(10, 2)
+  currency        String    @default("USD")
+  billingCycle    String    @default("MONTHLY") // MONTHLY | YEARLY | ONE_TIME | USAGE
+  nextDueDate     DateTime?
+  lastPaymentDate DateTime?
+  autoRenew       Boolean   @default(true)
+  notes           String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  payments PlatformPayment[]
+
+  @@map("platform_costs")
+}
+
+model PlatformPayment {
+  id             String   @id @default(uuid())
+  platformCostId String
+  amount         Decimal  @default(0) @db.Decimal(10, 2)
+  currency       String   @default("USD")
+  paidAt         DateTime @default(now())
+  periodLabel    String?           // e.g. "2026-06"
+  method         String?
+  reference      String?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  platform PlatformCost @relation(fields: [platformCostId], references: [id], onDelete: Cascade)
+
+  @@index([platformCostId])
+  @@map("platform_payments")
+}

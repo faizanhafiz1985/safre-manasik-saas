@@ -426,6 +426,73 @@ async function purgeAllTenantsIfRequested() {
   }
 }
 
+async function ensurePlatformCostTables() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS platform_costs (
+        id                VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        name              TEXT         NOT NULL,
+        category          TEXT,
+        url               TEXT,
+        "monthlyCost"     DECIMAL(10,2) NOT NULL DEFAULT 0,
+        currency          VARCHAR(8)   NOT NULL DEFAULT 'USD',
+        "billingCycle"    VARCHAR(12)  NOT NULL DEFAULT 'MONTHLY',
+        "nextDueDate"     TIMESTAMPTZ,
+        "lastPaymentDate" TIMESTAMPTZ,
+        "autoRenew"       BOOLEAN      NOT NULL DEFAULT true,
+        notes             TEXT,
+        "isActive"        BOOLEAN      NOT NULL DEFAULT true,
+        "createdAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        "updatedAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS platform_payments (
+        id               VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "platformCostId" VARCHAR(36)  NOT NULL REFERENCES platform_costs(id) ON DELETE CASCADE,
+        amount           DECIMAL(10,2) NOT NULL DEFAULT 0,
+        currency         VARCHAR(8)   NOT NULL DEFAULT 'USD',
+        "paidAt"         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        "periodLabel"    VARCHAR(16),
+        method           VARCHAR(32),
+        reference        TEXT,
+        notes            TEXT,
+        "createdById"    VARCHAR(36),
+        "createdAt"      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_pp_cost ON platform_payments("platformCostId")`);
+
+    // Seed the known platform stack once (only if table is empty). Costs/dates
+    // are sensible editable defaults — the SUPER_ADMIN adjusts them to reality.
+    const existing = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS n FROM platform_costs`);
+    if ((existing[0]?.n ?? 0) === 0) {
+      const now = new Date();
+      const firstNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+      const seed = [
+        ['Railway',    'Hosting',    'https://railway.app',          20.00, 'MONTHLY'],
+        ['Dynadot',    'Domain',     'https://www.dynadot.com',       1.00, 'YEARLY'],
+        ['Cloudflare', 'CDN / DNS',  'https://dash.cloudflare.com',   0.00, 'MONTHLY'],
+        ['Resend',     'Email',      'https://resend.com',           20.00, 'MONTHLY'],
+        ['GitHub',     'Code / CI',  'https://github.com',            0.00, 'MONTHLY'],
+        ['Sentry',     'Monitoring', 'https://sentry.io',             0.00, 'MONTHLY'],
+        ['PayPal',     'Payments',   'https://www.paypal.com',        0.00, 'USAGE'],
+      ];
+      for (const [name, category, url, cost, cycle] of seed) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO platform_costs (id, name, category, url, "monthlyCost", currency, "billingCycle", "nextDueDate")
+           VALUES (gen_random_uuid()::text, $1, $2, $3, $4, 'USD', $5, $6)`,
+          name, category, url, cost, cycle, cycle === 'USAGE' ? null : firstNextMonth
+        );
+      }
+      logger.info(`[bootstrap] Seeded ${seed.length} platform cost rows`);
+    }
+    logger.info('[bootstrap] platform_costs + platform_payments tables ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensurePlatformCostTables failed: ${err.message}`);
+  }
+}
+
 async function runBootstrap() {
   logger.info('[bootstrap] Running startup tasks...');
   await purgeAllTenantsIfRequested(); // runs only if PURGE_ALL_TENANTS=true
@@ -437,6 +504,7 @@ async function runBootstrap() {
   await ensureInvoiceTables();
   await ensureBookingColumns();
   await ensureRbacTables();
+  await ensurePlatformCostTables();
   logger.info('[bootstrap] Startup tasks complete.');
 }
 

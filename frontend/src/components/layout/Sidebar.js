@@ -6,6 +6,7 @@ import {
   Hotel, ConfirmationNumber, Payment, People, Settings, BarChart, EventNote,
   SupervisorAccount, Business, Campaign, Leaderboard, ViewKanban,
   AssignmentTurnedIn, Inbox, Tune, AdminPanelSettings, Receipt, Security,
+  AccountBalanceWallet,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import BrandLogo from '../BrandLogo';
@@ -17,6 +18,7 @@ const navItems = [
   { label: 'Plans & Pricing', icon: <BarChart />,           path: '/super-admin/plans',         roles: ['SUPER_ADMIN'], section: 'platform' },
   { label: 'Seed Hotels',     icon: <Hotel />,              path: '/super-admin/hotels',        roles: ['SUPER_ADMIN'], section: 'platform' },
   { label: 'Diagnostics',     icon: <Settings />,           path: '/super-admin/diagnostics',   roles: ['SUPER_ADMIN'], section: 'platform' },
+  { label: 'Cost Monitor',    icon: <AccountBalanceWallet />, path: '/super-admin/costs',        roles: ['SUPER_ADMIN'], section: 'platform' },
   { label: 'CRM Management',  icon: <AdminPanelSettings />, path: '/super-admin/crm',           roles: ['SUPER_ADMIN'], section: 'platform' },
 
   // Tenant operational (each carries a `feature` key for permission-driven visibility)
