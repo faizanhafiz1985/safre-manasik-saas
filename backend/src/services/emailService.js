@@ -44,7 +44,15 @@ if (process.env.SMTP_HOST && nodemailer) {
   });
 }
 
-const DEFAULT_FROM = process.env.SMTP_FROM || 'Safre Manasik <noreply@safremanasik.com>';
+// Always send with a friendly display name. A bare "noreply@domain" From (no
+// display name) is more likely to be junked by Outlook/Gmail. If SMTP_FROM is a
+// bare address, wrap it as "Safre Manasik <addr>".
+function withDisplayName(from) {
+  const v = (from || '').trim();
+  if (!v) return 'Safre Manasik <noreply@safremanasik.com>';
+  return v.includes('<') ? v : `Safre Manasik <${v}>`;
+}
+const DEFAULT_FROM = withDisplayName(process.env.SMTP_FROM);
 
 /**
  * Send a transactional email. Always resolves — never throws — so calling code
