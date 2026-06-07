@@ -167,6 +167,18 @@ const testEmail = async (req, res, next) => {
       html: '<p>This is a diagnostic test email from Safre Manasik.</p><p>If you received this, outgoing email is working correctly.</p>',
     });
     const smtpPass = process.env.SMTP_PASS || '';
+    // Pull the actual delivery status from Resend so we can distinguish
+    // "delivered" (check spam) from "bounced" (DNS/DKIM/recipient problem).
+    let deliveryStatus = null;
+    const key = process.env.RESEND_API_KEY || (smtpPass.startsWith('re_') ? smtpPass : null);
+    if (result.ok && result.id && key && typeof fetch === 'function') {
+      try {
+        await new Promise((r) => setTimeout(r, 4000));
+        const r = await fetch('https://api.resend.com/emails/' + result.id, { headers: { Authorization: 'Bearer ' + key } });
+        const j = await r.json().catch(() => ({}));
+        deliveryStatus = { httpStatus: r.status, last_event: j.last_event || null, to: j.to, from: j.from, created_at: j.created_at };
+      } catch (e) { deliveryStatus = { error: e.message }; }
+    }
     res.json({
       requestedTo: to,
       from: process.env.SMTP_FROM || 'Safre Manasik <noreply@safremanasik.com>',
@@ -178,6 +190,7 @@ const testEmail = async (req, res, next) => {
         resendKeySet: !!process.env.RESEND_API_KEY,
       },
       result, // { ok, mode: 'sent'|'logged', error?, id? }
+      deliveryStatus, // { last_event: 'delivered'|'bounced'|... } from Resend
     });
   } catch (err) { next(err); }
 };
