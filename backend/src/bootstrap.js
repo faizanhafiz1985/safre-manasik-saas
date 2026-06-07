@@ -493,6 +493,74 @@ async function ensurePlatformCostTables() {
   }
 }
 
+async function ensureFleetTables() {
+  try {
+    // Fleet columns on existing vehicles table (idempotent).
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "driverId" VARCHAR(36)`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "currentOdometer" INTEGER NOT NULL DEFAULT 0`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "oilChangeIntervalKm" INTEGER NOT NULL DEFAULT 5000`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "lastOilChangeOdometer" INTEGER NOT NULL DEFAULT 0`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS fleet_trips (
+        id            VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"    VARCHAR(36) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "vehicleId"   VARCHAR(36) NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+        "driverId"    VARCHAR(36),
+        "driverName"  TEXT,
+        status        VARCHAR(16) NOT NULL DEFAULT 'IN_PROGRESS',
+        "startedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "endedAt"     TIMESTAMPTZ,
+        "startLat"    DECIMAL(10,6), "startLng" DECIMAL(10,6), "startLabel" TEXT,
+        "endLat"      DECIMAL(10,6), "endLng"   DECIMAL(10,6), "endLabel"   TEXT,
+        "startOdometer" INTEGER, "endOdometer" INTEGER,
+        "distanceKm"  DECIMAL(10,2) NOT NULL DEFAULT 0,
+        "routePoints" JSONB,
+        purpose       TEXT, notes TEXT,
+        "createdById" VARCHAR(36),
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_ft_tenant_date ON fleet_trips("tenantId","startedAt")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_ft_vehicle ON fleet_trips("vehicleId")`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS fleet_cash_logs (
+        id            VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"    VARCHAR(36) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "vehicleId"   VARCHAR(36) REFERENCES vehicles(id) ON DELETE SET NULL,
+        "driverId"    VARCHAR(36), "driverName" TEXT,
+        "tripId"      VARCHAR(36) REFERENCES fleet_trips(id) ON DELETE SET NULL,
+        amount        DECIMAL(10,2) NOT NULL DEFAULT 0,
+        currency      VARCHAR(8) NOT NULL DEFAULT 'SAR',
+        "logDate"     TIMESTAMPTZ NOT NULL,
+        "submittedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes         TEXT, "createdById" VARCHAR(36),
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fc_tenant_date ON fleet_cash_logs("tenantId","logDate")`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS fleet_maintenance (
+        id                VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"        VARCHAR(36) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "vehicleId"       VARCHAR(36) NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+        type              VARCHAR(16) NOT NULL DEFAULT 'OIL_CHANGE',
+        status            VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+        "dueAtOdometer"   INTEGER,
+        "performedAt"     TIMESTAMPTZ, "performedOdometer" INTEGER,
+        "confirmedById"   VARCHAR(36), "confirmedByName" TEXT,
+        notes             TEXT,
+        "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fm_tenant_vehicle ON fleet_maintenance("tenantId","vehicleId")`);
+    logger.info('[bootstrap] fleet tables (+vehicle odometer cols) ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensureFleetTables failed: ${err.message}`);
+  }
+}
+
 async function runBootstrap() {
   logger.info('[bootstrap] Running startup tasks...');
   await purgeAllTenantsIfRequested(); // runs only if PURGE_ALL_TENANTS=true
@@ -505,6 +573,7 @@ async function runBootstrap() {
   await ensureBookingColumns();
   await ensureRbacTables();
   await ensurePlatformCostTables();
+  await ensureFleetTables();
   logger.info('[bootstrap] Startup tasks complete.');
 }
 

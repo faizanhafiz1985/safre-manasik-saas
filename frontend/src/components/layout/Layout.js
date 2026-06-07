@@ -15,6 +15,7 @@ const DRAWER_WIDTH = 260;
 const PATH_FEATURE = {
   '/packages': 'packages', '/bookings': 'bookings', '/vouchers': 'vouchers',
   '/voucher-forms': 'voucher_forms', '/transport': 'transport', '/catering': 'catering',
+  '/fleet': 'fleet_dashboard',
   '/hotels': 'hotels', '/payments': 'payments', '/customers': 'customers', '/users': 'users',
   '/roles': 'roles', '/reports/daily-schedule': 'daily_schedule', '/reports/transport': 'transport_report',
   '/crm': 'crm_overview', '/crm/leads': 'crm_leads', '/crm/pipeline': 'crm_pipeline',

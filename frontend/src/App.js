@@ -46,6 +46,7 @@ import CrmReportsPage from './pages/crm/CrmReportsPage';
 import CrmSettingsPage from './pages/crm/CrmSettingsPage';
 import SuperAdminCrmPage from './pages/SuperAdminCrmPage';
 import SuperAdminCostPage from './pages/SuperAdminCostPage';
+import FleetPage from './pages/FleetPage';
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="super-admin/hotels" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminHotelsPage /></PrivateRoute>} />
           <Route path="super-admin/crm" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminCrmPage /></PrivateRoute>} />
           <Route path="super-admin/costs" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminCostPage /></PrivateRoute>} />
+          <Route path="fleet" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><FleetPage /></PrivateRoute>} />
           <Route path="reports/daily-schedule" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><DailySchedulePage /></PrivateRoute>} />
           <Route path="reports/transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><TransportReportPage /></PrivateRoute>} />
           <Route path="tenant-settings" element={<PrivateRoute roles={['ADMIN']}><TenantSettingsPage /></PrivateRoute>} />

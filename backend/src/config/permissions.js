@@ -24,6 +24,10 @@ const FEATURES = {
   crm_inbox:        { label: 'CRM Inbox', plan: 'crm' },
   crm_reports:      { label: 'CRM Reports', plan: 'crm', adminOnly: true },
   crm_settings:     { label: 'CRM Integrations', plan: 'crm', adminOnly: true },
+  fleet_dashboard:  { label: 'Fleet Dashboard' },
+  fleet_trips:      { label: 'Fleet Trips' },
+  fleet_cash:       { label: 'Fleet Cash Log' },
+  fleet_maintenance:{ label: 'Fleet Maintenance' },
   users:            { label: 'Users', adminOnly: true },
   roles:            { label: 'Roles & Permissions', adminOnly: true },
   tenant_settings:  { label: 'Tenant Settings', adminOnly: true },
@@ -54,6 +58,7 @@ const VIEW_ALL_OPERATIONAL = [
   'dashboard', 'packages', 'bookings', 'vouchers', 'voucher_forms', 'hotels',
   'transport', 'catering', 'payments', 'customers', 'daily_schedule',
   'transport_report', 'crm_overview', 'crm_leads', 'crm_pipeline', 'crm_tasks', 'crm_inbox',
+  'fleet_dashboard', 'fleet_trips', 'fleet_cash', 'fleet_maintenance',
 ];
 
 const DEFAULT_PERMISSIONS = {
@@ -72,6 +77,10 @@ const DEFAULT_PERMISSIONS = {
     ['crm_tasks', ['create', 'edit']],
     ['crm_pipeline', ['create', 'edit']],
     ['crm_inbox', ['create', 'edit']],
+    // Fleet: drivers/agents log trips, submit cash, confirm maintenance
+    ['fleet_trips', ['create', 'edit']],
+    ['fleet_cash', ['create']],
+    ['fleet_maintenance', ['edit']],
   ]),
   // Customers can READ these modules today (GET routes are open to any
   // authenticated tenant user), so the defaults grant view to avoid any

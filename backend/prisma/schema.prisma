@@ -219,6 +219,9 @@ model Tenant {
   customerPassengers CustomerPassenger[]
   formVouchers       FormVoucher[]
   voucherInvoices    VoucherInvoice[]
+  fleetTrips         FleetTrip[]
+  fleetCashLogs      FleetCashLog[]
+  fleetMaintenance   FleetMaintenance[]
   tenantRoles        TenantRole[]
   rolePermissions    RolePermission[]
 
@@ -626,13 +629,102 @@ model Vehicle {
   notes         String?
   createdAt     DateTime    @default(now())
 
+  // ── Fleet management ──────────────────────────────────────────────────────
+  driverId              String?  // optional link to a driver User account
+  currentOdometer       Int      @default(0)    // km
+  oilChangeIntervalKm   Int      @default(5000) // alert threshold
+  lastOilChangeOdometer Int      @default(0)    // odometer at last oil change
+
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   routes            Route[]
   bookingTransports BookingTransport[]
+  fleetTrips        FleetTrip[]
+  fleetCashLogs     FleetCashLog[]
+  fleetMaintenance  FleetMaintenance[]
 
   @@unique([tenantId, plateNumber])
   @@index([tenantId])
   @@map("vehicles")
+}
+
+// ─── Fleet Management: trips, cash accountability, maintenance ────────────────
+model FleetTrip {
+  id            String    @id @default(uuid())
+  tenantId      String
+  vehicleId     String
+  driverId      String?
+  driverName    String?
+  status        String    @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | CANCELLED
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  startLat      Decimal?  @db.Decimal(10, 6)
+  startLng      Decimal?  @db.Decimal(10, 6)
+  startLabel    String?
+  endLat        Decimal?  @db.Decimal(10, 6)
+  endLng        Decimal?  @db.Decimal(10, 6)
+  endLabel      String?
+  startOdometer Int?
+  endOdometer   Int?
+  distanceKm    Decimal   @default(0) @db.Decimal(10, 2)
+  routePoints   Json?     // [{lat,lng,t}]
+  purpose       String?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  cashLogs FleetCashLog[]
+
+  @@index([tenantId, startedAt])
+  @@index([vehicleId])
+  @@map("fleet_trips")
+}
+
+model FleetCashLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  vehicleId   String?
+  driverId    String?
+  driverName  String?
+  tripId      String?
+  amount      Decimal  @default(0) @db.Decimal(10, 2)
+  currency    String   @default("SAR")
+  logDate     DateTime // the day the cash is for
+  submittedAt DateTime @default(now()) // server timestamp of submission
+  notes       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  trip    FleetTrip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, logDate])
+  @@map("fleet_cash_logs")
+}
+
+model FleetMaintenance {
+  id                String   @id @default(uuid())
+  tenantId          String
+  vehicleId         String
+  type              String   @default("OIL_CHANGE") // OIL_CHANGE | OTHER
+  status            String   @default("PENDING")    // PENDING | COMPLETED | SKIPPED
+  dueAtOdometer     Int?
+  performedAt       DateTime?
+  performedOdometer Int?
+  confirmedById     String?
+  confirmedByName   String?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, vehicleId])
+  @@map("fleet_maintenance")
 }
 
 model Route {

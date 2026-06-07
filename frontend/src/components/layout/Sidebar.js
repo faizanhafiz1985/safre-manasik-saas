@@ -6,7 +6,7 @@ import {
   Hotel, ConfirmationNumber, Payment, People, Settings, BarChart, EventNote,
   SupervisorAccount, Business, Campaign, Leaderboard, ViewKanban,
   AssignmentTurnedIn, Inbox, Tune, AdminPanelSettings, Receipt, Security,
-  AccountBalanceWallet,
+  AccountBalanceWallet, DirectionsCar,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import BrandLogo from '../BrandLogo';
@@ -31,6 +31,7 @@ const navItems = [
   { label: 'Vouchers',        icon: <ConfirmationNumber />, path: '/vouchers',                  roles: ['ADMIN','AGENT','CUSTOMER'], feature: 'vouchers' },
   { label: 'Direct Vouchers', icon: <Receipt />,            path: '/voucher-forms',             roles: ['ADMIN','AGENT'], feature: 'voucher_forms' },
   { label: 'Transport',       icon: <DirectionsBus />,      path: '/transport',                 roles: ['ADMIN','AGENT'], feature: 'transport' },
+  { label: 'Fleet Management',icon: <DirectionsCar />,      path: '/fleet',                     roles: ['ADMIN','AGENT'], feature: 'fleet_dashboard' },
   { label: 'Catering',        icon: <Restaurant />,         path: '/catering',                  roles: ['ADMIN','AGENT'], feature: 'catering' },
   { label: 'Hotels',          icon: <Hotel />,              path: '/hotels',                    roles: ['ADMIN','AGENT'], feature: 'hotels' },
   { label: 'Payments',        icon: <Payment />,            path: '/payments',                  roles: ['ADMIN','AGENT'], feature: 'payments' },
