@@ -1,4 +1,16 @@
 const prisma = require('../config/database');
+const { getFleetScope } = require('../utils/fleetScope');
+
+// Sanitize the fleet-related fields before persisting (empty driverId → null,
+// odometer/interval coerced to int). Leaves all other vehicle fields untouched.
+function cleanVehicleBody(body) {
+  const b = { ...body };
+  if ('driverId' in b) b.driverId = b.driverId ? String(b.driverId) : null;
+  for (const k of ['currentOdometer', 'oilChangeIntervalKm', 'lastOilChangeOdometer', 'capacity']) {
+    if (k in b && b[k] !== undefined && b[k] !== null && b[k] !== '') b[k] = parseInt(b[k], 10) || 0;
+  }
+  return b;
+}
 
 const getVehicles = async (req, res, next) => {
   try {
@@ -8,6 +20,9 @@ const getVehicles = async (req, res, next) => {
       ...(isAvailable !== undefined && { isAvailable: isAvailable === 'true' }),
       ...(search && { OR: [{ name: { contains: search, mode: 'insensitive' } }, { plateNumber: { contains: search, mode: 'insensitive' } }] }),
     };
+    // A driver (fleet perms but no fleet-wide access) only sees their assigned vehicles.
+    const scope = await getFleetScope(req);
+    if (scope.driver) where.driverId = req.user.id;
     const vehicles = await prisma.vehicle.findMany({ where, orderBy: { name: 'asc' } });
     res.json(vehicles);
   } catch (err) {
@@ -27,7 +42,7 @@ const getVehicle = async (req, res, next) => {
 
 const createVehicle = async (req, res, next) => {
   try {
-    const vehicle = await prisma.vehicle.create({ data: req.body });
+    const vehicle = await prisma.vehicle.create({ data: cleanVehicleBody(req.body) });
     res.status(201).json(vehicle);
   } catch (err) {
     next(err);
@@ -36,7 +51,7 @@ const createVehicle = async (req, res, next) => {
 
 const updateVehicle = async (req, res, next) => {
   try {
-    const result = await prisma.vehicle.updateMany({ where: { id: req.params.id }, data: req.body });
+    const result = await prisma.vehicle.updateMany({ where: { id: req.params.id }, data: cleanVehicleBody(req.body) });
     if (result.count === 0) return res.status(404).json({ error: 'Vehicle not found' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.id } });
     res.json(vehicle);

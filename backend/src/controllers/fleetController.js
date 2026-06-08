@@ -4,6 +4,24 @@
 
 const prisma = require('../config/database');
 const { getTenantId } = require('../config/tenantContext');
+const { getFleetScope } = require('../utils/fleetScope');
+
+// Returns null when the user is fleet-wide (no restriction), otherwise the array
+// of vehicle ids assigned to them (driver assignment-scope).
+async function myVehicleIds(req) {
+  const scope = await getFleetScope(req);
+  if (scope.wide) return null;
+  const vs = await prisma.vehicle.findMany({ where: { driverId: req.user.id }, select: { id: true } });
+  return vs.map((v) => v.id);
+}
+// True if the user may act on the given vehicle (wide, or it is assigned to them).
+async function vehicleAllowed(req, vehicleId) {
+  const scope = await getFleetScope(req);
+  if (scope.wide) return true;
+  if (!vehicleId) return true; // generic (non-vehicle) entry by a driver
+  const v = await prisma.vehicle.findFirst({ where: { id: vehicleId }, select: { driverId: true } });
+  return !!v && v.driverId === req.user.id;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function haversineKm(a, b) {
@@ -46,6 +64,7 @@ const startTrip = async (req, res, next) => {
   try {
     const { vehicleId, startLat, startLng, startLabel, startOdometer, purpose } = req.body;
     if (!vehicleId) return res.status(400).json({ error: 'Vehicle is required' });
+    if (!(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId } });
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
 
@@ -74,6 +93,7 @@ const addPoint = async (req, res, next) => {
     const { lat, lng } = req.body;
     const trip = await prisma.fleetTrip.findFirst({ where: { id: req.params.id } });
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (!(await vehicleAllowed(req, trip.vehicleId))) return res.status(403).json({ error: 'Not your assigned vehicle.' });
     if (trip.status !== 'IN_PROGRESS') return res.status(409).json({ error: 'Trip is not in progress' });
     const pts = Array.isArray(trip.routePoints) ? trip.routePoints : [];
     if (num(lat) !== null && num(lng) !== null) pts.push({ lat: num(lat), lng: num(lng), t: Date.now() });
@@ -87,6 +107,7 @@ const stopTrip = async (req, res, next) => {
     const { endLat, endLng, endLabel, endOdometer, distanceKm, routePoints, notes } = req.body;
     const trip = await prisma.fleetTrip.findFirst({ where: { id: req.params.id } });
     if (!trip) return res.status(404).json({ error: 'Trip not found' });
+    if (!(await vehicleAllowed(req, trip.vehicleId))) return res.status(403).json({ error: 'Not your assigned vehicle.' });
     if (trip.status === 'COMPLETED') return res.status(409).json({ error: 'Trip already completed' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: trip.vehicleId } });
 
@@ -128,6 +149,7 @@ const createTrip = async (req, res, next) => {
   try {
     const { vehicleId, startLabel, endLabel, startOdometer, endOdometer, distanceKm, startedAt, endedAt, purpose, notes } = req.body;
     if (!vehicleId) return res.status(400).json({ error: 'Vehicle is required' });
+    if (!(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId } });
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
     const startOdo = num(startOdometer), endOdo = num(endOdometer);
@@ -154,12 +176,14 @@ const createTrip = async (req, res, next) => {
 const listTrips = async (req, res, next) => {
   try {
     const { date, vehicleId, driverId, status, page = 1, limit = 50 } = req.query;
+    const ids = await myVehicleIds(req);
     const where = {
       ...(vehicleId && { vehicleId }),
       ...(driverId && { driverId }),
       ...(status && { status }),
       ...(date && { startedAt: (() => { const { start, end } = dayRange(date); return { gte: start, lte: end }; })() }),
     };
+    if (ids) where.vehicleId = { in: ids }; // driver: own vehicles only
     const [data, total] = await Promise.all([
       prisma.fleetTrip.findMany({ where, orderBy: { startedAt: 'desc' }, skip: (Number(page) - 1) * Number(limit), take: Number(limit), include: { vehicle: { select: { name: true, plateNumber: true } } } }),
       prisma.fleetTrip.count({ where }),
@@ -181,6 +205,7 @@ const submitCash = async (req, res, next) => {
   try {
     const { vehicleId, tripId, amount, currency, logDate, notes } = req.body;
     if (amount === undefined || isNaN(Number(amount)) || Number(amount) < 0) return res.status(400).json({ error: 'A valid cash amount is required' });
+    if (vehicleId && !(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
     const cash = await prisma.fleetCashLog.create({
       data: {
         tenantId: getTenantId(), vehicleId: vehicleId || null, tripId: tripId || null,
@@ -197,11 +222,13 @@ const submitCash = async (req, res, next) => {
 const listCash = async (req, res, next) => {
   try {
     const { date, vehicleId, driverId } = req.query;
+    const ids = await myVehicleIds(req);
     const where = {
       ...(vehicleId && { vehicleId }),
       ...(driverId && { driverId }),
       ...(date && { logDate: (() => { const { start, end } = dayRange(date); return { gte: start, lte: end }; })() }),
     };
+    if (ids) where.vehicleId = { in: ids }; // driver: own vehicles only
     const data = await prisma.fleetCashLog.findMany({ where, orderBy: { submittedAt: 'desc' }, take: 100, include: { vehicle: { select: { name: true, plateNumber: true } } } });
     const total = data.reduce((s, c) => s + Number(c.amount || 0), 0);
     res.json({ data, totalAmount: +total.toFixed(2) });
@@ -211,7 +238,8 @@ const listCash = async (req, res, next) => {
 // ── Maintenance / oil-change alerts ─────────────────────────────────────────
 const alerts = async (req, res, next) => {
   try {
-    const vehicles = await prisma.vehicle.findMany({ orderBy: { name: 'asc' } });
+    const ids = await myVehicleIds(req);
+    const vehicles = await prisma.vehicle.findMany({ where: ids ? { id: { in: ids } } : {}, orderBy: { name: 'asc' } });
     const rows = vehicles.map((v) => ({
       vehicleId: v.id, name: v.name, plateNumber: v.plateNumber,
       currentOdometer: v.currentOdometer || 0, lastOilChangeOdometer: v.lastOilChangeOdometer || 0,
@@ -229,6 +257,7 @@ const alerts = async (req, res, next) => {
 const confirmMaintenance = async (req, res, next) => {
   try {
     const { vehicleId, completed, performedOdometer, notes, type } = req.body;
+    if (!(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId } });
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
     const odo = num(performedOdometer) ?? vehicle.currentOdometer;
@@ -255,8 +284,9 @@ const confirmMaintenance = async (req, res, next) => {
 const listMaintenance = async (req, res, next) => {
   try {
     const { vehicleId } = req.query;
+    const ids = await myVehicleIds(req);
     const data = await prisma.fleetMaintenance.findMany({
-      where: { ...(vehicleId && { vehicleId }) },
+      where: { ...(vehicleId && { vehicleId }), ...(ids && { vehicleId: { in: ids } }) },
       orderBy: { createdAt: 'desc' }, take: 100,
       include: { vehicle: { select: { name: true, plateNumber: true } } },
     });
@@ -268,10 +298,12 @@ const listMaintenance = async (req, res, next) => {
 const dashboard = async (req, res, next) => {
   try {
     const { start, end } = dayRange(req.query.date);
+    const ids = await myVehicleIds(req);
+    const vehWhere = ids ? { vehicleId: { in: ids } } : {};
     const [trips, cash, vehicles] = await Promise.all([
-      prisma.fleetTrip.findMany({ where: { startedAt: { gte: start, lte: end } }, include: { vehicle: { select: { name: true, plateNumber: true } } } }),
-      prisma.fleetCashLog.findMany({ where: { logDate: { gte: start, lte: end } } }),
-      prisma.vehicle.findMany(),
+      prisma.fleetTrip.findMany({ where: { startedAt: { gte: start, lte: end }, ...vehWhere }, include: { vehicle: { select: { name: true, plateNumber: true } } } }),
+      prisma.fleetCashLog.findMany({ where: { logDate: { gte: start, lte: end }, ...vehWhere } }),
+      prisma.vehicle.findMany({ where: ids ? { id: { in: ids } } : {} }),
     ]);
     const vMap = Object.fromEntries(vehicles.map((v) => [v.id, v]));
 
