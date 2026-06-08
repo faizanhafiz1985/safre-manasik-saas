@@ -303,7 +303,13 @@ export default function TransportPage() {
 
       {/* Per-vehicle fleet drawer (Cash Log + Maintenance) */}
       <Drawer anchor="right" open={!!fleetVehicle} onClose={() => setFleetVehicle(null)}
-        PaperProps={{ sx: { width: { xs: '100%', sm: 480 }, p: 0 } }}>
+        PaperProps={{ sx: { width: { xs: '100%', sm: 480 }, p: 0,
+          // Override the global dark-green Drawer theme (used by the sidebar) so
+          // form fields are dark-on-white and readable. Header keeps its branding.
+          bgcolor: '#fff', color: 'text.primary',
+          '& .MuiInputBase-input': { color: 'text.primary' },
+          '& .MuiInputLabel-root': { color: 'text.secondary' },
+        } }}>
         {fleetVehicle && <VehicleFleetDrawer vehicle={fleetVehicle} onClose={() => setFleetVehicle(null)} onChanged={load} />}
       </Drawer>
     </Box>
