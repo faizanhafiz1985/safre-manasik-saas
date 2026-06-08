@@ -38,7 +38,15 @@ export default function TransportPage() {
   useEffect(() => {
     // Any active tenant user can be assigned as a driver (drivers are often
     // customer-base accounts given a Driver role) — don't exclude by role.
-    if (isAdmin) api.get('/users').then((r) => setDrivers((r.data || []).filter((u) => u.isActive !== false))).catch(() => {});
+    // NOTE: GET /users is paginated → the array is in r.data.data, not r.data.
+    if (isAdmin) {
+      api.get('/users', { params: { limit: 200 } })
+        .then((r) => {
+          const list = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+          setDrivers(list.filter((u) => u.isActive !== false));
+        })
+        .catch(() => {});
+    }
   }, [isAdmin]);
 
   const onVehicle = async (data) => {
