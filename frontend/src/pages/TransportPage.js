@@ -36,7 +36,9 @@ export default function TransportPage() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    if (isAdmin) api.get('/users').then((r) => setDrivers((r.data || []).filter((u) => u.role !== 'CUSTOMER'))).catch(() => {});
+    // Any active tenant user can be assigned as a driver (drivers are often
+    // customer-base accounts given a Driver role) — don't exclude by role.
+    if (isAdmin) api.get('/users').then((r) => setDrivers((r.data || []).filter((u) => u.isActive !== false))).catch(() => {});
   }, [isAdmin]);
 
   const onVehicle = async (data) => {
