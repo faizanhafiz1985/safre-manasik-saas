@@ -293,7 +293,7 @@ async function ensureRbacTables() {
     // tenant that doesn't have them yet (idempotent, runs on each boot).
     const tenants = await prisma.$queryRawUnsafe(`SELECT id FROM tenants`);
     for (const t of tenants) {
-      for (const key of ['ADMIN', 'AGENT', 'CUSTOMER']) {
+      for (const key of ['ADMIN', 'AGENT', 'CUSTOMER', 'DRIVER']) {
         const existing = await prisma.$queryRawUnsafe(
           `SELECT id FROM tenant_roles WHERE "tenantId" = $1 AND key = $2 LIMIT 1`, t.id, key,
         );

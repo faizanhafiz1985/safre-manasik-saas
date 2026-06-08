@@ -21,7 +21,7 @@ async function audit(req, action, entityId, payload) {
 // Lazily ensure a tenant has its three built-in system roles (covers tenants
 // created after the last server boot).
 async function ensureTenantSystemRoles(tenantId) {
-  for (const key of ['ADMIN', 'AGENT', 'CUSTOMER']) {
+  for (const key of ['ADMIN', 'AGENT', 'CUSTOMER', 'DRIVER']) {
     let role = await prisma.tenantRole.findFirst({ where: { tenantId, key } });
     if (!role) {
       role = await prisma.tenantRole.create({

@@ -95,6 +95,15 @@ const DEFAULT_PERMISSIONS = {
     ['catering', ['view']],
     ['payments', ['view']],
   ]),
+  // Fleet Driver — scoped to their assigned vehicle only. Deliberately has NO
+  // fleet_dashboard, which is what makes them own-vehicle scoped (see fleetScope).
+  DRIVER: perms([
+    ['dashboard', ['view']],
+    ['transport', ['view']],
+    ['fleet_trips', ['view', 'create', 'edit']],
+    ['fleet_cash', ['view', 'create']],
+    ['fleet_maintenance', ['view', 'edit']],
+  ]),
 };
 
 module.exports = { FEATURES, ACTIONS, FEATURE_KEYS, ALL_PERMISSIONS, DEFAULT_PERMISSIONS };

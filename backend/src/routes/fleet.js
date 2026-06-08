@@ -4,7 +4,10 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { tenantScope, requireTenant } = require('../middleware/tenant');
 const { requirePermission } = require('../middleware/permission');
 
-router.use(authenticate, tenantScope, requireTenant, authorize('ADMIN', 'AGENT'));
+// Permission-driven (no blanket role gate): a Driver-role user may have base
+// role CUSTOMER/AGENT. Each route enforces the specific fleet_* permission, and
+// fleetScope restricts drivers to their own assigned vehicle.
+router.use(authenticate, tenantScope, requireTenant);
 
 // Trips (GPS / manual)
 router.get('/trips', requirePermission('fleet_trips', 'view'), ctrl.listTrips);
