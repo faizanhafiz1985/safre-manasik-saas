@@ -12,6 +12,7 @@ router.post('/tenants/:id/suspend', ctrl.suspendTenant);
 router.post('/tenants/:id/activate', ctrl.activateTenant);
 router.post('/tenants/:id/impersonate', ctrl.impersonate);
 router.delete('/tenants/:id', ctrl.deleteTenant);
+router.post('/tenants/:id/purge-data', ctrl.purgeTenantData);
 
 router.get('/stats', ctrl.platformStats);
 router.get('/bookings', ctrl.allBookings);
