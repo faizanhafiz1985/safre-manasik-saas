@@ -9,6 +9,8 @@ import api from '../services/api';
 import { toast } from 'react-toastify';
 
 const vehicleColors = { BUS: '#1B4B35', CAR: '#4A90D9', VIP: '#C9A227' };
+const colorFor = (t) => vehicleColors[t] || '#64748b';
+const DEFAULT_VEHICLE_TYPES = ['BUS', 'CAR', 'VIP', 'SUV', 'VAN', 'COASTER', 'SEDAN', 'MINIBUS', 'TRUCK', 'LIMOUSINE'];
 const statusColors  = { CONFIRMED: 'success', TENTATIVE: 'warning', MIXED: 'info', CANCELLED: 'error' };
 
 export default function TransportReportPage() {
@@ -17,8 +19,17 @@ export default function TransportReportPage() {
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(endDefault);
   const [vehicleType, setVehicleType] = useState('');
+  const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLE_TYPES);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/config').then((r) => {
+      const raw = (r.data?.vehicle_types || '').trim();
+      const list = raw ? raw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) : [];
+      if (list.length) setVehicleTypes(list);
+    }).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,7 +133,7 @@ export default function TransportReportPage() {
               <Typography variant="caption" color="text.secondary">By Vehicle Type</Typography>
               <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
                 {Object.entries(data.summary.byVehicleType || {}).map(([t, n]) => (
-                  <Chip key={t} label={`${t}: ${n}`} size="small" sx={{ bgcolor: vehicleColors[t], color: '#fff' }} />
+                  <Chip key={t} label={`${t}: ${n}`} size="small" sx={{ bgcolor: colorFor(t), color: '#fff' }} />
                 ))}
               </Stack>
             </CardContent></Card>
@@ -140,9 +151,7 @@ export default function TransportReportPage() {
             <InputLabel>Vehicle Type</InputLabel>
             <Select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} label="Vehicle Type">
               <MenuItem value="">All</MenuItem>
-              <MenuItem value="BUS">Bus</MenuItem>
-              <MenuItem value="CAR">Car</MenuItem>
-              <MenuItem value="VIP">VIP</MenuItem>
+              {vehicleTypes.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
             </Select>
           </FormControl>
           <Stack direction="row" spacing={1}>
@@ -191,7 +200,7 @@ export default function TransportReportPage() {
                   <TableCell><strong>{r.departureTime}</strong>{r.arrivalTime && <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>→ {r.arrivalTime}</Typography>}</TableCell>
                   <TableCell><strong>{r.vehicleName}</strong><br/><code>{r.vehiclePlate}</code></TableCell>
                   <TableCell>
-                    <Chip label={r.vehicleType} size="small" sx={{ bgcolor: vehicleColors[r.vehicleType], color: '#fff' }} />
+                    <Chip label={r.vehicleType} size="small" sx={{ bgcolor: colorFor(r.vehicleType), color: '#fff' }} />
                   </TableCell>
                   <TableCell>{r.driverName}<br/><Typography variant="caption" color="text.secondary">{r.driverPhone}</Typography></TableCell>
                   <TableCell>{r.routeFrom} → {r.routeTo}</TableCell>

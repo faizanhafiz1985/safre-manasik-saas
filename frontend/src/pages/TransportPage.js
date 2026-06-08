@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Button, Card, CardContent, Grid, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Tabs, Tab, Chip, IconButton, Tooltip, Drawer, Divider } from '@mui/material';
+import { Box, Typography, Button, Card, CardContent, Grid, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Tabs, Tab, Chip, IconButton, Tooltip, Drawer, Divider, Autocomplete } from '@mui/material';
 import { Add, DirectionsBus, Route, Delete, AttachMoney, Build } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+
+const DEFAULT_VEHICLE_TYPES = ['BUS', 'CAR', 'VIP', 'SUV', 'VAN', 'COASTER', 'SEDAN', 'MINIBUS', 'TRUCK', 'LIMOUSINE'];
+const TYPE_COLORS = { BUS: 'primary', CAR: 'default', VIP: 'warning', SUV: 'info', VAN: 'secondary', COASTER: 'success' };
+const TYPE_ICONS = { BUS: '🚌', CAR: '🚗', VIP: '🏎️', SUV: '🚙', VAN: '🚐', COASTER: '🚍', MINIBUS: '🚐', TRUCK: '🚚', LIMOUSINE: '🚘' };
+const colorFor = (t) => TYPE_COLORS[t] || 'default';
+const iconFor = (t) => TYPE_ICONS[t] || '🚐';
 import { PATTERNS, MESSAGES, alphaOnly, numericOnly } from '../utils/validation';
 
 // Saudi mobile: starts with 966 followed by exactly 9 digits (total 12 digits)
@@ -23,7 +29,8 @@ export default function TransportPage() {
   const [drivers, setDrivers] = useState([]);
   const [fleetVehicle, setFleetVehicle] = useState(null); // vehicle whose fleet drawer is open
 
-  const { register: regV, handleSubmit: hsV, reset: resetV, formState: { errors: errV } } = useForm();
+  const { register: regV, handleSubmit: hsV, reset: resetV, control: ctrlV, formState: { errors: errV } } = useForm();
+  const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLE_TYPES);
   const { register: regR, handleSubmit: hsR, reset: resetR, formState: { errors: errR } } = useForm();
 
   const load = () => {
@@ -36,6 +43,12 @@ export default function TransportPage() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
+    // Configurable vehicle types from System Config (falls back to defaults).
+    api.get('/config').then((r) => {
+      const raw = (r.data?.vehicle_types || '').trim();
+      const list = raw ? raw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) : [];
+      setVehicleTypes(list.length ? Array.from(new Set([...list])) : DEFAULT_VEHICLE_TYPES);
+    }).catch(() => {});
     // Only ACTIVE users holding the "Driver" role can be assigned to a vehicle.
     // NOTE: GET /users is paginated → the array is in r.data.data, not r.data.
     if (isAdmin) {
@@ -97,8 +110,6 @@ export default function TransportPage() {
   const openVehicle = (v = null) => { setEditVehicle(v); resetV(v || { type: 'BUS', capacity: 20, isAvailable: true }); setVehicleDialog(true); };
   const openRoute   = (r = null) => { setEditRoute(r);   resetR(r || {}); setRouteDialog(true); };
 
-  const typeColor = { BUS: 'primary', CAR: 'default', VIP: 'warning' };
-  const typeIcon  = { BUS: '🚌', CAR: '🚗', VIP: '🏎️' };
 
   return (
     <Box>
@@ -126,9 +137,9 @@ export default function TransportPage() {
                   <Card>
                     <CardContent>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="h5">{typeIcon[v.type]}</Typography>
+                        <Typography variant="h5">{iconFor(v.type)}</Typography>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Chip label={v.type} color={typeColor[v.type]} size="small" />
+                          <Chip label={v.type} color={colorFor(v.type)} size="small" />
                           <Chip label={v.isAvailable ? 'Available' : 'Busy'} color={v.isAvailable ? 'success' : 'error'} size="small" />
                         </Box>
                       </Box>
@@ -210,11 +221,16 @@ export default function TransportPage() {
                   {...regV('name', { required: 'Name required' })} />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <TextField fullWidth select label="Type" defaultValue="BUS" {...regV('type')}>
-                  <MenuItem value="BUS">Bus</MenuItem>
-                  <MenuItem value="CAR">Car</MenuItem>
-                  <MenuItem value="VIP">VIP</MenuItem>
-                </TextField>
+                <Controller name="type" control={ctrlV} defaultValue={editVehicle?.type || 'BUS'}
+                  render={({ field }) => (
+                    <Autocomplete freeSolo options={vehicleTypes}
+                      value={field.value || ''}
+                      onChange={(_, v) => field.onChange((v || '').toUpperCase())}
+                      onInputChange={(_, v) => field.onChange((v || '').toUpperCase())}
+                      renderInput={(params) => <TextField {...params} fullWidth label="Type"
+                        helperText="Pick or type a type — manage the list in System Config" />}
+                    />
+                  )} />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField fullWidth label="Plate Number *" error={!!errV.plateNumber} helperText={errV.plateNumber?.message}

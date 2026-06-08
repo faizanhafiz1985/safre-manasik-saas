@@ -6,6 +6,8 @@ const { getFleetScope } = require('../utils/fleetScope');
 function cleanVehicleBody(body) {
   const b = { ...body };
   if ('driverId' in b) b.driverId = b.driverId ? String(b.driverId) : null;
+  // Vehicle type is a free configurable string — normalise (trim + uppercase).
+  if ('type' in b && b.type) b.type = String(b.type).trim().toUpperCase().slice(0, 40);
   for (const k of ['currentOdometer', 'oilChangeIntervalKm', 'lastOilChangeOdometer', 'capacity']) {
     if (k in b && b[k] !== undefined && b[k] !== null && b[k] !== '') b[k] = parseInt(b[k], 10) || 0;
   }

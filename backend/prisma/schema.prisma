@@ -27,11 +27,8 @@ enum BookingStatus {
   CANCELLED
 }
 
-enum VehicleType {
-  BUS
-  CAR
-  VIP
-}
+// Vehicle type is a free, tenant-configurable string (managed via the
+// `vehicle_types` System Config key) — no longer a fixed enum.
 
 enum MealType {
   BREAKFAST
@@ -620,7 +617,7 @@ model Vehicle {
   tenantId      String
   name          String
   plateNumber   String
-  type          VehicleType
+  type          String
   capacity      Int
   driverName    String
   driverPhone   String

@@ -15,6 +15,7 @@ const CONFIG_FIELDS = [
   { key: 'vat_percentage', label: 'VAT Percentage (%)', section: 'Financial', decimalField: true },
   { key: 'booking_tentative_days', label: 'Tentative Booking Expiry (Days)', section: 'Bookings', integerField: true },
   { key: 'voucher_terms', label: 'Voucher & Invoice Terms and Conditions', section: 'Vouchers', multiline: true, wide: true, rows: 4 },
+  { key: 'vehicle_types', label: 'Vehicle Types (comma-separated, e.g. BUS, CAR, VIP, SUV, VAN, COASTER)', section: 'Fleet', multiline: true, wide: true, rows: 2 },
 ];
 
 export default function AdminConfigPage() {

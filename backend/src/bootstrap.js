@@ -495,6 +495,9 @@ async function ensurePlatformCostTables() {
 
 async function ensureFleetTables() {
   try {
+    // Vehicle type is now a free, configurable string — migrate the legacy enum
+    // column to varchar (idempotent; safe to run if already varchar).
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ALTER COLUMN "type" TYPE VARCHAR(40) USING "type"::text`); } catch (e) { logger.warn(`[bootstrap] vehicle type->varchar: ${e.message}`); }
     // Fleet columns on existing vehicles table (idempotent).
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "driverId" VARCHAR(36)`);
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "currentOdometer" INTEGER NOT NULL DEFAULT 0`);
