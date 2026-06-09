@@ -9,7 +9,7 @@ function cleanVehicleBody(body) {
   // Vehicle type is a free configurable string — normalise (trim + uppercase).
   if ('type' in b && b.type) b.type = String(b.type).trim().toUpperCase().slice(0, 40);
   for (const k of ['initialOdometer', 'oilChangeIntervalKm', 'lastOilChangeOdometer', 'capacity']) {
-    if (k in b && b[k] !== undefined && b[k] !== null && b[k] !== '') b[k] = parseInt(b[k], 10) || 0;
+    if (k in b && b[k] !== undefined && b[k] !== null && b[k] !== '') b[k] = Math.max(0, parseInt(b[k], 10) || 0);
   }
   // currentOdometer is computed (initial + trip kms) — never accepted from input.
   delete b.currentOdometer;

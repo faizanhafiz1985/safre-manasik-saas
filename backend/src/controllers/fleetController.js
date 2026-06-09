@@ -139,7 +139,8 @@ const stopTrip = async (req, res, next) => {
     if (endOdo !== null && startOdo !== null && endOdo >= startOdo) dist = endOdo - startOdo;
     else if (num(distanceKm) !== null) dist = num(distanceKm);
     else dist = routeDistanceKm(pts);
-    dist = +Number(dist).toFixed(2);
+    // Odometer integrity: distance can never be negative.
+    dist = Math.max(0, +Number(dist).toFixed(2));
 
     await prisma.fleetTrip.updateMany({
       where: { id: trip.id },
@@ -170,6 +171,9 @@ const createTrip = async (req, res, next) => {
   try {
     const { vehicleId, startLabel, endLabel, startOdometer, endOdometer, distanceKm, startedAt, endedAt, purpose, notes } = req.body;
     if (!vehicleId) return res.status(400).json({ error: 'Vehicle is required' });
+    // Spec: the driver must enter both locations for a manual trip.
+    if (!startLabel || !String(startLabel).trim()) return res.status(400).json({ error: 'From Location is required' });
+    if (!endLabel || !String(endLabel).trim()) return res.status(400).json({ error: 'To Location is required' });
     if (!(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId } });
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
@@ -177,6 +181,8 @@ const createTrip = async (req, res, next) => {
     let dist = num(distanceKm);
     if (dist === null && startOdo !== null && endOdo !== null && endOdo >= startOdo) dist = endOdo - startOdo;
     dist = +Number(dist || 0).toFixed(2);
+    // Odometer integrity: a trip must add positive distance.
+    if (!(dist > 0)) return res.status(400).json({ error: 'Trip distance must be greater than 0 km (or provide valid start/end odometer readings).' });
 
     const trip = await prisma.fleetTrip.create({
       data: {

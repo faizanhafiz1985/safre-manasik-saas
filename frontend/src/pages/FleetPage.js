@@ -172,6 +172,10 @@ function TripsTab({ vehicles }) {
   };
   const saveManual = async () => {
     if (!mForm.vehicleId) return toast.error('Select a vehicle');
+    if (!mForm.startLabel?.trim()) return toast.error('From location is required');
+    if (!mForm.endLabel?.trim()) return toast.error('To location is required');
+    const hasOdo = mForm.startOdometer !== '' && mForm.endOdometer !== '' && Number(mForm.endOdometer) > Number(mForm.startOdometer);
+    if (!hasOdo && !(Number(mForm.distanceKm) > 0)) return toast.error('Enter a distance > 0 km (or valid start/end odometers)');
     try { await api.post('/fleet/trips', mForm); toast.success('Trip logged'); setManual(false); setMForm({ vehicleId: '', startLabel: '', endLabel: '', startOdometer: '', endOdometer: '', distanceKm: '', purpose: '' }); load(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
