@@ -24,6 +24,7 @@ router.post('/cash', requirePermission('fleet_cash', 'create'), ctrl.submitCash)
 // Maintenance / oil-change alerts
 router.get('/maintenance/alerts', requirePermission('fleet_maintenance', 'view'), ctrl.alerts);
 router.get('/maintenance', requirePermission('fleet_maintenance', 'view'), ctrl.listMaintenance);
+router.get('/maintenance/:id/receipt', requirePermission('fleet_maintenance', 'view'), ctrl.getReceipt);
 router.post('/maintenance/confirm', requirePermission('fleet_maintenance', 'edit'), ctrl.confirmMaintenance);
 
 // Central dashboard

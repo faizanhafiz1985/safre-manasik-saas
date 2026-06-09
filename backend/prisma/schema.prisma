@@ -628,7 +628,8 @@ model Vehicle {
 
   // ── Fleet management ──────────────────────────────────────────────────────
   driverId              String?  // optional link to a driver User account
-  currentOdometer       Int      @default(0)    // km
+  initialOdometer       Int      @default(0)    // km — admin-editable baseline
+  currentOdometer       Int      @default(0)    // km — auto: initial + trip kms (read-only)
   oilChangeIntervalKm   Int      @default(5000) // alert threshold
   lastOilChangeOdometer Int      @default(0)    // odometer at last oil change
 
@@ -714,6 +715,8 @@ model FleetMaintenance {
   confirmedById     String?
   confirmedByName   String?
   notes             String?
+  receiptName       String?  // original filename of the uploaded evidence
+  receiptData       String?  // base64 data URL of receipt voucher/invoice
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now()) @updatedAt
 

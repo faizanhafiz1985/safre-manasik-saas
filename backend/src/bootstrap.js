@@ -501,6 +501,16 @@ async function ensureFleetTables() {
     // Fleet columns on existing vehicles table (idempotent).
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "driverId" VARCHAR(36)`);
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "currentOdometer" INTEGER NOT NULL DEFAULT 0`);
+    // Initial odometer (admin-editable baseline). One-time backfill from the
+    // current odometer when the column is first added, so existing vehicles
+    // keep their reading (current = initial until new trips accumulate).
+    const hadInitial = await prisma.$queryRawUnsafe(
+      `SELECT 1 FROM information_schema.columns WHERE table_name='vehicles' AND column_name='initialOdometer'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "initialOdometer" INTEGER NOT NULL DEFAULT 0`);
+    if (!hadInitial.length) {
+      await prisma.$executeRawUnsafe(`UPDATE vehicles SET "initialOdometer" = "currentOdometer"`);
+      logger.info('[bootstrap] backfilled vehicles.initialOdometer from currentOdometer');
+    }
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "oilChangeIntervalKm" INTEGER NOT NULL DEFAULT 5000`);
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "lastOilChangeOdometer" INTEGER NOT NULL DEFAULT 0`);
 
@@ -558,6 +568,9 @@ async function ensureFleetTables() {
         "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fm_tenant_vehicle ON fleet_maintenance("tenantId","vehicleId")`);
+    // Receipt evidence on maintenance confirmations (after table exists).
+    await prisma.$executeRawUnsafe(`ALTER TABLE fleet_maintenance ADD COLUMN IF NOT EXISTS "receiptName" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE fleet_maintenance ADD COLUMN IF NOT EXISTS "receiptData" TEXT`);
     logger.info('[bootstrap] fleet tables (+vehicle odometer cols) ready');
   } catch (err) {
     logger.error(`[bootstrap] ensureFleetTables failed: ${err.message}`);

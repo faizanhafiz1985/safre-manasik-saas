@@ -52,6 +52,26 @@ function oilStatus(v) {
   return { kmSinceOil: since, intervalKm: interval, kmRemaining: remaining, status, due: remaining <= 0 };
 }
 const num = (v) => (v === undefined || v === null || v === '' || isNaN(Number(v)) ? null : Number(v));
+
+// When the odometer crosses the oil-change interval, automatically open a
+// PENDING OIL_CHANGE maintenance task (one per vehicle at a time). Returns the
+// task if one was created so callers can prompt the driver immediately.
+async function autoCreateOilTask(vehicle, tenantId) {
+  try {
+    if (!oilStatus(vehicle).due) return null;
+    const pending = await prisma.fleetMaintenance.findFirst({
+      where: { vehicleId: vehicle.id, type: 'OIL_CHANGE', status: 'PENDING' },
+    });
+    if (pending) return null; // task already open
+    return await prisma.fleetMaintenance.create({
+      data: {
+        tenantId, vehicleId: vehicle.id, type: 'OIL_CHANGE', status: 'PENDING',
+        dueAtOdometer: (vehicle.lastOilChangeOdometer || 0) + (vehicle.oilChangeIntervalKm || 5000),
+        notes: `Auto-created: odometer ${vehicle.currentOdometer} km reached the oil-change interval.`,
+      },
+    });
+  } catch { return null; }
+}
 const dayRange = (dateStr) => {
   const base = dateStr ? new Date(dateStr) : new Date();
   const start = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, 0, 0);
@@ -139,8 +159,9 @@ const stopTrip = async (req, res, next) => {
     await prisma.vehicle.updateMany({ where: { id: trip.vehicleId }, data: { currentOdometer: newOdo } });
 
     const updatedVehicle = { ...vehicle, currentOdometer: newOdo };
+    const oilTask = await autoCreateOilTask(updatedVehicle, trip.tenantId);
     const completed = await prisma.fleetTrip.findFirst({ where: { id: trip.id } });
-    res.json({ trip: completed, oil: oilStatus(updatedVehicle), vehicleOdometer: newOdo });
+    res.json({ trip: completed, oil: oilStatus(updatedVehicle), vehicleOdometer: newOdo, oilTaskCreated: !!oilTask });
   } catch (err) { next(err); }
 };
 
@@ -169,7 +190,9 @@ const createTrip = async (req, res, next) => {
     if (endOdo !== null && endOdo > newOdo) newOdo = endOdo; else newOdo += dist;
     newOdo = Math.round(newOdo);
     await prisma.vehicle.updateMany({ where: { id: vehicleId }, data: { currentOdometer: newOdo } });
-    res.status(201).json({ trip, oil: oilStatus({ ...vehicle, currentOdometer: newOdo }) });
+    const updatedVehicle = { ...vehicle, currentOdometer: newOdo };
+    const oilTask = await autoCreateOilTask(updatedVehicle, getTenantId());
+    res.status(201).json({ trip, oil: oilStatus(updatedVehicle), vehicleOdometer: newOdo, oilTaskCreated: !!oilTask });
   } catch (err) { next(err); }
 };
 
@@ -253,31 +276,75 @@ const alerts = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// Driver confirms an oil change was done (or explicitly not done).
+// Driver confirms an oil change was done (Yes) or not (No). "Yes" requires the
+// odometer reading at service AND an uploaded receipt voucher/invoice as
+// evidence (base64 data URL, max ~5MB). Updates the auto-created PENDING task
+// when one exists; otherwise creates a record. Both outcomes are logged.
+const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 const confirmMaintenance = async (req, res, next) => {
   try {
-    const { vehicleId, completed, performedOdometer, notes, type } = req.body;
+    const { vehicleId, completed, performedOdometer, notes, type, receiptData, receiptName } = req.body;
     if (!(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId } });
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
-    const odo = num(performedOdometer) ?? vehicle.currentOdometer;
 
-    const record = await prisma.fleetMaintenance.create({
-      data: {
-        tenantId: getTenantId(), vehicleId, type: type || 'OIL_CHANGE',
-        status: completed ? 'COMPLETED' : 'SKIPPED',
-        dueAtOdometer: (vehicle.lastOilChangeOdometer || 0) + (vehicle.oilChangeIntervalKm || 5000),
-        performedAt: completed ? new Date() : null,
-        performedOdometer: completed ? odo : null,
-        confirmedById: req.user.id, confirmedByName: req.user.name, notes: notes || null,
-      },
+    let odo = num(performedOdometer);
+    if (completed) {
+      if (odo === null) return res.status(400).json({ error: 'Current odo meter reading at service is required.' });
+      if (!receiptData || !/^data:(image\/|application\/pdf)/.test(String(receiptData))) {
+        return res.status(400).json({ error: 'Receipt voucher/invoice upload is required as evidence (image or PDF).' });
+      }
+      if (String(receiptData).length > MAX_RECEIPT_BYTES * 1.4) {
+        return res.status(400).json({ error: 'Receipt file is too large (max 5 MB).' });
+      }
+    }
+
+    const tenantId = getTenantId();
+    const fill = {
+      status: completed ? 'COMPLETED' : 'SKIPPED',
+      performedAt: completed ? new Date() : null,
+      performedOdometer: completed ? odo : null,
+      confirmedById: req.user.id, confirmedByName: req.user.name,
+      notes: notes || null,
+      receiptName: completed ? (receiptName || 'receipt') : null,
+      receiptData: completed ? receiptData : null,
+      updatedAt: new Date(),
+    };
+    // Resolve the auto-created PENDING task first so the same task is closed.
+    const pending = await prisma.fleetMaintenance.findFirst({
+      where: { vehicleId, type: type || 'OIL_CHANGE', status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
     });
+    let record;
+    if (pending) {
+      await prisma.fleetMaintenance.updateMany({ where: { id: pending.id }, data: fill });
+      record = await prisma.fleetMaintenance.findFirst({ where: { id: pending.id } });
+    } else {
+      record = await prisma.fleetMaintenance.create({
+        data: {
+          tenantId, vehicleId, type: type || 'OIL_CHANGE',
+          dueAtOdometer: (vehicle.lastOilChangeOdometer || 0) + (vehicle.oilChangeIntervalKm || 5000),
+          ...fill,
+        },
+      });
+    }
     // If completed, reset the oil-change baseline so the alert clears.
     if (completed) {
       await prisma.vehicle.updateMany({ where: { id: vehicleId }, data: { lastOilChangeOdometer: odo } });
     }
     const updated = await prisma.vehicle.findFirst({ where: { id: vehicleId } });
-    res.status(201).json({ record, oil: oilStatus(updated) });
+    const { receiptData: _omit, ...lightRecord } = record;
+    res.status(201).json({ record: { ...lightRecord, hasReceipt: !!record.receiptData }, oil: oilStatus(updated) });
+  } catch (err) { next(err); }
+};
+
+// Fetch the receipt evidence for one maintenance record (own-vehicle scoped).
+const getReceipt = async (req, res, next) => {
+  try {
+    const rec = await prisma.fleetMaintenance.findFirst({ where: { id: req.params.id } });
+    if (!rec || !rec.receiptData) return res.status(404).json({ error: 'Receipt not found' });
+    if (!(await vehicleAllowed(req, rec.vehicleId))) return res.status(403).json({ error: 'Not your assigned vehicle.' });
+    res.json({ receiptName: rec.receiptName, receiptData: rec.receiptData });
   } catch (err) { next(err); }
 };
 
@@ -285,11 +352,13 @@ const listMaintenance = async (req, res, next) => {
   try {
     const { vehicleId } = req.query;
     const ids = await myVehicleIds(req);
-    const data = await prisma.fleetMaintenance.findMany({
+    const rows = await prisma.fleetMaintenance.findMany({
       where: { ...(vehicleId && { vehicleId }), ...(ids && { vehicleId: { in: ids } }) },
       orderBy: { createdAt: 'desc' }, take: 100,
       include: { vehicle: { select: { name: true, plateNumber: true } } },
     });
+    // Strip heavy base64 receipt payloads from list responses.
+    const data = rows.map(({ receiptData, ...r }) => ({ ...r, hasReceipt: !!receiptData }));
     res.json({ data });
   } catch (err) { next(err); }
 };
@@ -342,5 +411,5 @@ const dashboard = async (req, res, next) => {
 
 module.exports = {
   startTrip, addPoint, stopTrip, createTrip, listTrips, removeTrip,
-  submitCash, listCash, alerts, confirmMaintenance, listMaintenance, dashboard,
+  submitCash, listCash, alerts, confirmMaintenance, listMaintenance, getReceipt, dashboard,
 };

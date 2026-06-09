@@ -310,6 +310,8 @@ function MaintenanceTab({ onChange }) {
   const [history, setHistory] = useState([]);
   const [dlg, setDlg] = useState(null);
   const [odo, setOdo] = useState('');
+  const [file, setFile] = useState(null);
+  const readFileAsDataUrl = (f) => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(f); });
   const load = useCallback(() => {
     api.get('/fleet/maintenance/alerts').then((r) => setAlerts(r.data)).catch(() => {});
     api.get('/fleet/maintenance').then((r) => setHistory(r.data.data || [])).catch(() => {});
@@ -317,9 +319,17 @@ function MaintenanceTab({ onChange }) {
   useEffect(() => { load(); }, [load]);
   const confirm = async (completed) => {
     try {
-      await api.post('/fleet/maintenance/confirm', { vehicleId: dlg.vehicleId, completed, performedOdometer: odo || undefined });
-      toast.success(completed ? 'Oil change confirmed' : 'Marked as not done (logged)');
-      setDlg(null); setOdo(''); load(); onChange && onChange();
+      let receiptData, receiptName;
+      if (completed) {
+        if (!odo || Number(odo) <= 0) return toast.error('Enter the current odo meter reading');
+        if (!file) return toast.error('Upload the receipt voucher/invoice as evidence');
+        if (file.size > 5 * 1024 * 1024) return toast.error('Receipt file must be under 5 MB');
+        receiptData = await readFileAsDataUrl(file);
+        receiptName = file.name;
+      }
+      await api.post('/fleet/maintenance/confirm', { vehicleId: dlg.vehicleId, completed, performedOdometer: odo || undefined, receiptData, receiptName });
+      toast.success(completed ? 'Oil change confirmed with receipt' : 'Marked as not done (logged)');
+      setDlg(null); setOdo(''); setFile(null); load(); onChange && onChange();
     } catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
   return (
@@ -382,7 +392,11 @@ function MaintenanceTab({ onChange }) {
         <DialogTitle>Oil Change — {dlg?.name}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>Confirm whether the oil change was completed. This is logged either way.</Typography>
-          <TextField fullWidth size="small" label="Odometer at service (km)" type="number" value={odo} onChange={(e) => setOdo(e.target.value)} />
+          <TextField fullWidth size="small" label="Current Odo Meter at service (km)" type="number" sx={{ mb: 1.5 }} value={odo} onChange={(e) => setOdo(e.target.value)} />
+          <Button component="label" variant="outlined" fullWidth size="small">
+            {file ? `📎 ${file.name}` : 'Upload Receipt / Invoice (required for Completed)'}
+            <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          </Button>
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
           <Button color="inherit" onClick={() => confirm(false)}>Not Done</Button>

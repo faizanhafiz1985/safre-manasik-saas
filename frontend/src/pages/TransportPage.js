@@ -11,6 +11,14 @@ const TYPE_COLORS = { BUS: 'primary', CAR: 'default', VIP: 'warning', SUV: 'info
 const TYPE_ICONS = { BUS: '🚌', CAR: '🚗', VIP: '🏎️', SUV: '🚙', VAN: '🚐', COASTER: '🚍', MINIBUS: '🚐', TRUCK: '🚚', LIMOUSINE: '🚘' };
 const colorFor = (t) => TYPE_COLORS[t] || 'default';
 const iconFor = (t) => TYPE_ICONS[t] || '🚐';
+// Read an uploaded file (receipt image/PDF) as a base64 data URL.
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(r.result);
+  r.onerror = reject;
+  r.readAsDataURL(file);
+});
+const EMPTY_TRIP = { startLabel: '', endLabel: '', distanceKm: '', notes: '' };
 import { PATTERNS, MESSAGES, alphaOnly, numericOnly } from '../utils/validation';
 
 // Saudi mobile: starts with 966 followed by exactly 9 digits (total 12 digits)
@@ -28,6 +36,14 @@ export default function TransportPage() {
   const [editRoute, setEditRoute] = useState(null);
   const [drivers, setDrivers] = useState([]);
   const [fleetVehicle, setFleetVehicle] = useState(null); // vehicle whose fleet drawer is open
+  const [tripVehicle, setTripVehicle] = useState(null);   // vehicle whose Add Trip dialog is open
+  const [tripForm, setTripForm] = useState(EMPTY_TRIP);
+  const [tripSaving, setTripSaving] = useState(false);
+  // Oil-change prompt after a trip crosses the interval: step 'ask' (Yes/No) → 'evidence'
+  const [oilPrompt, setOilPrompt] = useState(null); // { vehicle, step }
+  const [oilOdo, setOilOdo] = useState('');
+  const [oilFile, setOilFile] = useState(null);
+  const [oilSaving, setOilSaving] = useState(false);
 
   const { register: regV, handleSubmit: hsV, reset: resetV, control: ctrlV, formState: { errors: errV } } = useForm();
   const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLE_TYPES);
@@ -110,6 +126,62 @@ export default function TransportPage() {
   const openVehicle = (v = null) => { setEditVehicle(v); resetV(v || { type: 'BUS', capacity: 20, isAvailable: true }); setVehicleDialog(true); };
   const openRoute   = (r = null) => { setEditRoute(r);   resetR(r || {}); setRouteDialog(true); };
 
+  // ── Add Trip (driver enters From / To / km; odometer advances automatically) ─
+  const submitTrip = async () => {
+    if (!tripForm.startLabel.trim()) return toast.error('From Location is required');
+    if (!tripForm.endLabel.trim()) return toast.error('To Location is required');
+    const dist = Number(tripForm.distanceKm);
+    if (!dist || dist <= 0) return toast.error('Enter the trip distance in km');
+    setTripSaving(true);
+    try {
+      const r = await api.post('/fleet/trips', {
+        vehicleId: tripVehicle.id, startLabel: tripForm.startLabel.trim(),
+        endLabel: tripForm.endLabel.trim(), distanceKm: dist, notes: tripForm.notes || undefined,
+      });
+      toast.success(`Trip logged — Current Odo Meter is now ${(r.data.vehicleOdometer || 0).toLocaleString()} km`);
+      const veh = tripVehicle;
+      setTripVehicle(null); setTripForm(EMPTY_TRIP); load();
+      // Interval reached → maintenance task auto-created; ask the driver now.
+      if (r.data.oil?.due) {
+        setOilOdo(String(r.data.vehicleOdometer || ''));
+        setOilFile(null);
+        setOilPrompt({ vehicle: veh, step: 'ask' });
+      }
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to log trip'); }
+    finally { setTripSaving(false); }
+  };
+
+  const answerOilPrompt = async (changed) => {
+    if (!changed) {
+      setOilSaving(true);
+      try {
+        await api.post('/fleet/maintenance/confirm', { vehicleId: oilPrompt.vehicle.id, completed: false });
+        toast.info('Logged: oil NOT changed — the task stays pending under Maintenance.');
+        setOilPrompt(null); load();
+      } catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
+      finally { setOilSaving(false); }
+      return;
+    }
+    setOilPrompt((p) => ({ ...p, step: 'evidence' }));
+  };
+
+  const submitOilEvidence = async () => {
+    if (!oilOdo || Number(oilOdo) <= 0) return toast.error('Enter the current odo meter reading');
+    if (!oilFile) return toast.error('Upload the receipt voucher/invoice as evidence');
+    if (oilFile.size > 5 * 1024 * 1024) return toast.error('Receipt file must be under 5 MB');
+    setOilSaving(true);
+    try {
+      const receiptData = await readFileAsDataUrl(oilFile);
+      await api.post('/fleet/maintenance/confirm', {
+        vehicleId: oilPrompt.vehicle.id, completed: true,
+        performedOdometer: Number(oilOdo), receiptData, receiptName: oilFile.name,
+      });
+      toast.success('Oil change confirmed with receipt evidence');
+      setOilPrompt(null); load();
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to confirm'); }
+    finally { setOilSaving(false); }
+  };
+
 
   return (
     <Box>
@@ -148,10 +220,13 @@ export default function TransportPage() {
                       <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid #f1f5f9' }}>
                         <Typography variant="caption" display="block">Driver: {v.driverName}</Typography>
                         <Typography variant="caption" display="block" color="text.secondary">{v.driverPhone}</Typography>
-                        <Typography variant="caption" display="block" color="text.secondary">Odometer: {(v.currentOdometer || 0).toLocaleString()} km</Typography>
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          Initial Odo: {(v.initialOdometer || 0).toLocaleString()} km · <strong>Current Odo: {(v.currentOdometer || 0).toLocaleString()} km</strong>
+                        </Typography>
                       </Box>
                       {/* Per-vehicle fleet features */}
-                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                        <Button size="small" variant="contained" startIcon={<Route />} onClick={() => { setTripVehicle(v); setTripForm(EMPTY_TRIP); }}>Add Trip</Button>
                         <Button size="small" variant="outlined" startIcon={<AttachMoney />} onClick={() => setFleetVehicle({ ...v, _tab: 'cash' })}>Cash Log</Button>
                         <Button size="small" variant="outlined" startIcon={<Build />} onClick={() => setFleetVehicle({ ...v, _tab: 'maint' })}>Maintenance</Button>
                       </Box>
@@ -264,8 +339,9 @@ export default function TransportPage() {
                 </TextField>
               </Grid>
               <Grid item xs={6}>
-                <TextField fullWidth label="Current Odometer (km)" type="number" inputProps={{ min: 0, onKeyDown: numericOnly }}
-                  {...regV('currentOdometer', { valueAsNumber: true })} />
+                <TextField fullWidth label="Initial Odo Meter (km)" type="number" inputProps={{ min: 0, onKeyDown: numericOnly }}
+                  helperText={editVehicle ? `Current Odo Meter: ${(editVehicle.currentOdometer || 0).toLocaleString()} km (auto — trips add to it)` : 'Current Odo Meter starts at this value'}
+                  {...regV('initialOdometer', { valueAsNumber: true })} />
               </Grid>
               <Grid item xs={6}>
                 <TextField fullWidth label="Oil Change Interval (km)" type="number" defaultValue={5000} inputProps={{ min: 0, onKeyDown: numericOnly }}
@@ -317,6 +393,62 @@ export default function TransportPage() {
         </form>
       </Dialog>
 
+      {/* Add Trip dialog (driver logs From / To / km) */}
+      <Dialog open={!!tripVehicle} onClose={() => !tripSaving && setTripVehicle(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Add Trip — {tripVehicle?.name}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.25 }}>
+            <Grid item xs={12}><TextField fullWidth size="small" label="From Location *" value={tripForm.startLabel} onChange={(e) => setTripForm((f) => ({ ...f, startLabel: e.target.value }))} /></Grid>
+            <Grid item xs={12}><TextField fullWidth size="small" label="To Location *" value={tripForm.endLabel} onChange={(e) => setTripForm((f) => ({ ...f, endLabel: e.target.value }))} /></Grid>
+            <Grid item xs={12}><TextField fullWidth size="small" label="Trip Distance (km) *" type="number" inputProps={{ min: 1 }}
+              helperText={`Adds to Current Odo Meter (now ${(tripVehicle?.currentOdometer || 0).toLocaleString()} km)`}
+              value={tripForm.distanceKm} onChange={(e) => setTripForm((f) => ({ ...f, distanceKm: e.target.value }))} /></Grid>
+            <Grid item xs={12}><TextField fullWidth size="small" label="Notes" value={tripForm.notes} onChange={(e) => setTripForm((f) => ({ ...f, notes: e.target.value }))} /></Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTripVehicle(null)} disabled={tripSaving}>Cancel</Button>
+          <Button variant="contained" onClick={submitTrip} disabled={tripSaving}>{tripSaving ? <CircularProgress size={18} color="inherit" /> : 'Save Trip'}</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Oil-change prompt: interval reached → ask driver Yes/No, evidence on Yes */}
+      <Dialog open={!!oilPrompt} onClose={() => !oilSaving && setOilPrompt(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#C0392B' }}>Oil Change Required — {oilPrompt?.vehicle?.name}</DialogTitle>
+        <DialogContent>
+          {oilPrompt?.step === 'ask' ? (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              The Current Odo Meter has reached the Oil Change Interval. A maintenance task has been created.
+              <br /><strong>Has the oil been changed?</strong>
+            </Typography>
+          ) : (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2" sx={{ mb: 2 }}>Enter the current odo meter value and upload the receipt voucher/invoice as evidence.</Typography>
+              <TextField fullWidth size="small" label="Current Odo Meter (km) *" type="number" sx={{ mb: 2 }}
+                value={oilOdo} onChange={(e) => setOilOdo(e.target.value)} />
+              <Button component="label" variant="outlined" fullWidth sx={{ mb: 1 }}>
+                {oilFile ? `📎 ${oilFile.name}` : 'Upload Receipt / Invoice *'}
+                <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => setOilFile(e.target.files?.[0] || null)} />
+              </Button>
+              <Typography variant="caption" color="text.secondary">Image or PDF, max 5 MB</Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+          {oilPrompt?.step === 'ask' ? (
+            <>
+              <Button color="inherit" onClick={() => answerOilPrompt(false)} disabled={oilSaving}>No</Button>
+              <Button variant="contained" color="success" onClick={() => answerOilPrompt(true)} disabled={oilSaving}>Yes, Oil Changed</Button>
+            </>
+          ) : (
+            <>
+              <Button color="inherit" onClick={() => setOilPrompt(null)} disabled={oilSaving}>Later</Button>
+              <Button variant="contained" color="success" onClick={submitOilEvidence} disabled={oilSaving}>{oilSaving ? <CircularProgress size={18} color="inherit" /> : 'Confirm Oil Change'}</Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
       {/* Per-vehicle fleet drawer (Cash Log + Maintenance) */}
       <Drawer anchor="right" open={!!fleetVehicle} onClose={() => setFleetVehicle(null)}
         PaperProps={{ sx: { width: { xs: '100%', sm: 480 }, p: 0,
@@ -356,9 +488,34 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
     try { await api.post('/fleet/cash', { vehicleId: vehicle.id, ...cashForm }); toast.success('Cash submitted'); setCashForm({ amount: '', logDate: new Date().toISOString().substring(0, 10), notes: '' }); loadCash(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
+  const [maintFile, setMaintFile] = useState(null);
   const confirmOil = async (completed) => {
-    try { await api.post('/fleet/maintenance/confirm', { vehicleId: vehicle.id, completed, performedOdometer: odo || undefined }); toast.success(completed ? 'Oil change confirmed' : 'Logged as not done'); loadMaint(); onChanged && onChanged(); }
+    try {
+      let receiptData, receiptName;
+      if (completed) {
+        if (!odo || Number(odo) <= 0) return toast.error('Enter the current odo meter reading');
+        if (!maintFile) return toast.error('Upload the receipt voucher/invoice as evidence');
+        if (maintFile.size > 5 * 1024 * 1024) return toast.error('Receipt file must be under 5 MB');
+        receiptData = await readFileAsDataUrl(maintFile);
+        receiptName = maintFile.name;
+      }
+      await api.post('/fleet/maintenance/confirm', { vehicleId: vehicle.id, completed, performedOdometer: odo || undefined, receiptData, receiptName });
+      toast.success(completed ? 'Oil change confirmed with receipt' : 'Logged as not done');
+      setMaintFile(null); loadMaint(); onChanged && onChanged();
+    }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
+  };
+  const openReceipt = async (id) => {
+    try {
+      const r = await api.get(`/fleet/maintenance/${id}/receipt`);
+      const w = window.open('', '_blank');
+      if (!w) return toast.error('Pop-up blocked — allow pop-ups to view the receipt');
+      const d = r.data.receiptData || '';
+      w.document.write(d.startsWith('data:application/pdf')
+        ? `<iframe src="${d}" style="width:100%;height:100vh;border:0"></iframe>`
+        : `<img src="${d}" style="max-width:100%" alt="receipt"/>`);
+      w.document.close();
+    } catch { toast.error('Failed to load receipt'); }
   };
 
   return (
@@ -408,7 +565,11 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
                 </Typography>
               </Box>
             ) : <Typography variant="caption" color="text.secondary">Loading…</Typography>}
-            <TextField fullWidth size="small" label="Odometer at service (km)" type="number" sx={{ mb: 1.5 }} value={odo} onChange={(e) => setOdo(e.target.value)} />
+            <TextField fullWidth size="small" label="Current Odo Meter at service (km)" type="number" sx={{ mb: 1.5 }} value={odo} onChange={(e) => setOdo(e.target.value)} />
+            <Button component="label" variant="outlined" fullWidth size="small" sx={{ mb: 1.5 }}>
+              {maintFile ? `📎 ${maintFile.name}` : 'Upload Receipt / Invoice (required for Done)'}
+              <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => setMaintFile(e.target.files?.[0] || null)} />
+            </Button>
             <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
               <Button fullWidth variant="contained" color="success" onClick={() => confirmOil(true)}>Oil Change Done</Button>
               <Button fullWidth variant="outlined" color="inherit" onClick={() => confirmOil(false)}>Not Done</Button>
@@ -422,7 +583,10 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
                   <TableRow key={h.id}><TableCell><Typography variant="caption">{new Date(h.createdAt).toLocaleDateString()}</Typography></TableCell>
                     <TableCell><Chip size="small" label={h.status} color={h.status === 'COMPLETED' ? 'success' : 'default'} /></TableCell>
                     <TableCell align="right">{h.performedOdometer ? KM(h.performedOdometer) : '—'}</TableCell>
-                    <TableCell><Typography variant="caption">{h.confirmedByName || '—'}</Typography></TableCell></TableRow>
+                    <TableCell>
+                      <Typography variant="caption">{h.confirmedByName || '—'}</Typography>
+                      {h.hasReceipt && <Button size="small" sx={{ minWidth: 0, p: 0, ml: 0.5 }} onClick={() => openReceipt(h.id)}>📎</Button>}
+                    </TableCell></TableRow>
                 ))}
                 {history.length === 0 && <TableRow><TableCell colSpan={4} align="center" sx={{ color: 'text.secondary', py: 2 }}>No records.</TableCell></TableRow>}
               </TableBody>

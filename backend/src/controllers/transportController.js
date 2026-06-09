@@ -8,9 +8,11 @@ function cleanVehicleBody(body) {
   if ('driverId' in b) b.driverId = b.driverId ? String(b.driverId) : null;
   // Vehicle type is a free configurable string — normalise (trim + uppercase).
   if ('type' in b && b.type) b.type = String(b.type).trim().toUpperCase().slice(0, 40);
-  for (const k of ['currentOdometer', 'oilChangeIntervalKm', 'lastOilChangeOdometer', 'capacity']) {
+  for (const k of ['initialOdometer', 'oilChangeIntervalKm', 'lastOilChangeOdometer', 'capacity']) {
     if (k in b && b[k] !== undefined && b[k] !== null && b[k] !== '') b[k] = parseInt(b[k], 10) || 0;
   }
+  // currentOdometer is computed (initial + trip kms) — never accepted from input.
+  delete b.currentOdometer;
   return b;
 }
 
@@ -44,7 +46,10 @@ const getVehicle = async (req, res, next) => {
 
 const createVehicle = async (req, res, next) => {
   try {
-    const vehicle = await prisma.vehicle.create({ data: cleanVehicleBody(req.body) });
+    const data = cleanVehicleBody(req.body);
+    // New vehicle: current odometer starts at the initial baseline.
+    data.currentOdometer = data.initialOdometer || 0;
+    const vehicle = await prisma.vehicle.create({ data });
     res.status(201).json(vehicle);
   } catch (err) {
     next(err);
@@ -53,7 +58,16 @@ const createVehicle = async (req, res, next) => {
 
 const updateVehicle = async (req, res, next) => {
   try {
-    const result = await prisma.vehicle.updateMany({ where: { id: req.params.id }, data: cleanVehicleBody(req.body) });
+    const data = cleanVehicleBody(req.body);
+    // Editing the initial baseline shifts the computed current odometer by the
+    // same delta, preserving all accumulated trip kms.
+    if ('initialOdometer' in data) {
+      const old = await prisma.vehicle.findFirst({ where: { id: req.params.id }, select: { initialOdometer: true, currentOdometer: true } });
+      if (!old) return res.status(404).json({ error: 'Vehicle not found' });
+      const delta = (data.initialOdometer || 0) - (old.initialOdometer || 0);
+      if (delta !== 0) data.currentOdometer = Math.max(0, (old.currentOdometer || 0) + delta);
+    }
+    const result = await prisma.vehicle.updateMany({ where: { id: req.params.id }, data });
     if (result.count === 0) return res.status(404).json({ error: 'Vehicle not found' });
     const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.id } });
     res.json(vehicle);
