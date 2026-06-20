@@ -21,35 +21,6 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 const IMPORT_SCHEMAS = {
-  customers: {
-    model: 'customer',
-    label: 'Customers',
-    roles: ['ADMIN', 'AGENT'],
-    columns: [
-      { key: 'type', header: 'Type (B2C/B2B)', type: 'enum', enumValues: ['B2C', 'B2B'], default: 'B2C', example: 'B2C' },
-      { key: 'firstName', header: 'First Name', type: 'string', required: true, example: 'Ahmed' },
-      { key: 'lastName', header: 'Last Name', type: 'string', required: true, example: 'Khan' },
-      { key: 'mobile', header: 'Mobile (966XXXXXXXXX)', type: 'digits', required: true, example: '966500000001' },
-      { key: 'whatsapp', header: 'WhatsApp (966XXXXXXXXX)', type: 'digits', required: true, example: '966500000001' },
-      { key: 'gender', header: 'Gender (Male/Female)', type: 'enum', enumValues: ['Male', 'Female'], example: 'Male' },
-      { key: 'passport', header: 'Passport #', type: 'string', example: 'AB1234567' },
-      { key: 'email', header: 'Email', type: 'string', example: 'ahmed@example.com' },
-      { key: 'companyName', header: 'Company Name (B2B only)', type: 'string', example: '' },
-      { key: 'crNumber', header: 'CR # (B2B, 10 digits)', type: 'digits', len: 10, example: '' },
-      { key: 'nationalAddress', header: 'National Address (B2B only)', type: 'string', example: '' },
-    ],
-    validateRow: (d) => {
-      if (d.type === 'B2B') {
-        if (!d.companyName) return 'Company Name is required for B2B customers';
-        if (!d.crNumber) return 'CR # (10 digits) is required for B2B customers';
-        if (!d.nationalAddress) return 'National Address is required for B2B customers';
-      } else {
-        d.companyName = null; d.crNumber = null; d.nationalAddress = null;
-      }
-      return null;
-    },
-  },
-
   hotels: {
     model: 'hotel',
     label: 'Hotels',

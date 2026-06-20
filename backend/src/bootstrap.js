@@ -95,49 +95,16 @@ async function ensurePasswordResetTokensTable() {
   }
 }
 
-async function ensureCustomerTables() {
+// The standalone Customer directory was retired — customers are now CUSTOMER-role
+// Users (the same records bookings use). Drop the orphaned tables. Idempotent:
+// DROP ... IF EXISTS is a no-op once they're gone.
+async function dropLegacyCustomerTables() {
   try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS customers (
-        id                VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        "tenantId"        VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        type              VARCHAR(8)   NOT NULL DEFAULT 'B2C',
-        "firstName"       TEXT         NOT NULL,
-        "lastName"        TEXT         NOT NULL,
-        mobile            VARCHAR(20)  NOT NULL,
-        whatsapp          VARCHAR(20)  NOT NULL,
-        passport          TEXT,
-        email             TEXT,
-        gender            VARCHAR(10),
-        "companyName"     TEXT,
-        "crNumber"        VARCHAR(10),
-        "nationalAddress" TEXT,
-        "createdAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-        "updatedAt"       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-      )
-    `);
-    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_customers_tenant ON customers("tenantId")`);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS customer_passengers (
-        id           VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        "tenantId"   VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        "customerId" VARCHAR(36)  NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-        "firstName"  TEXT         NOT NULL,
-        "lastName"   TEXT         NOT NULL,
-        mobile       VARCHAR(20),
-        whatsapp     VARCHAR(20),
-        passport     TEXT,
-        email        TEXT,
-        gender       VARCHAR(10),
-        "createdAt"  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-      )
-    `);
-    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cust_pax_tenant   ON customer_passengers("tenantId")`);
-    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cust_pax_customer ON customer_passengers("customerId")`);
-    logger.info('[bootstrap] customers + customer_passengers tables ready');
+    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS customer_passengers CASCADE`);
+    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS customers CASCADE`);
+    logger.info('[bootstrap] legacy customers + customer_passengers tables removed');
   } catch (err) {
-    logger.error(`[bootstrap] ensureCustomerTables failed: ${err.message}`);
+    logger.error(`[bootstrap] dropLegacyCustomerTables failed: ${err.message}`);
   }
 }
 
@@ -587,7 +554,7 @@ async function runBootstrap() {
   await ensureSuperAdmin();
   await ensurePlanConfigs();
   await ensurePasswordResetTokensTable();
-  await ensureCustomerTables();
+  await dropLegacyCustomerTables();
   await ensureVoucherFormTables();
   await ensureInvoiceTables();
   await ensureBookingColumns();

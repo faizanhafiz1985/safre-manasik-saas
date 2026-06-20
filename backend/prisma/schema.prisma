@@ -211,9 +211,6 @@ model Tenant {
   crmAutomationRules CrmAutomationRule[]
   crmNotifications   CrmNotification[]
 
-  // ── Customer registry (B2C / B2B with child passengers) ──────────────────
-  customers          Customer[]
-  customerPassengers CustomerPassenger[]
   formVouchers       FormVoucher[]
   voucherInvoices    VoucherInvoice[]
   fleetTrips         FleetTrip[]
@@ -274,57 +271,6 @@ model User {
 }
 
 // ─── Customer registry ────────────────────────────────────────────────────────
-// Standalone customer records (distinct from login Users — no email/password).
-// B2C = individual; B2B = company with optional child passenger records.
-// `type` and `gender` are stored as plain strings (validated in the controller)
-// to avoid Postgres enum coupling, matching the raw-SQL table in bootstrap.js.
-
-model Customer {
-  id              String   @id @default(uuid())
-  tenantId        String
-  type            String   @default("B2C") // 'B2C' | 'B2B'
-  firstName       String
-  lastName        String
-  mobile          String
-  whatsapp        String
-  passport        String?
-  email           String?
-  gender          String?  // 'Male' | 'Female'
-  // B2B-only fields (null for B2C)
-  companyName     String?
-  crNumber        String?
-  nationalAddress String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now()) @updatedAt
-
-  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  passengers CustomerPassenger[]
-
-  @@index([tenantId])
-  @@map("customers")
-}
-
-model CustomerPassenger {
-  id         String   @id @default(uuid())
-  tenantId   String
-  customerId String
-  firstName  String
-  lastName   String
-  mobile     String?
-  whatsapp   String?
-  passport   String?
-  email      String?
-  gender     String?
-  createdAt  DateTime @default(now())
-
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([customerId])
-  @@map("customer_passengers")
-}
-
 // ─── Form Voucher (standalone hotel / transport vouchers) ─────────────────────
 // Distinct from booking-based Voucher. Created via the voucher form, supports a
 // Tentative→Confirmed lifecycle with an HCN reference, and its own SAF-prefixed

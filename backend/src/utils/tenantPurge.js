@@ -19,7 +19,6 @@ function buildPurgeSteps() {
     ['price_tiers',           `DELETE FROM price_tiers x USING packages p WHERE x."packageId"=p.id AND p."tenantId"=$1`],
     ['package_hotels',        `DELETE FROM package_hotels x USING packages p WHERE x."packageId"=p.id AND p."tenantId"=$1`],
     ['meal_plans',            `DELETE FROM meal_plans x USING catering_vendors v WHERE x."vendorId"=v.id AND v."tenantId"=$1`],
-    ['customer_passengers',   `DELETE FROM customer_passengers x USING customers c WHERE x."customerId"=c.id AND c."tenantId"=$1`],
     ['crm_messages',          `DELETE FROM crm_messages x USING crm_conversations c WHERE x."conversationId"=c.id AND c."tenantId"=$1`],
     ['crm_lead_activities',   `DELETE FROM crm_lead_activities x USING crm_leads l WHERE x."leadId"=l.id AND l."tenantId"=$1`],
     ['crm_opportunity_activities', `DELETE FROM crm_opportunity_activities x USING crm_opportunities o WHERE x."opportunityId"=o.id AND o."tenantId"=$1`],
@@ -32,7 +31,7 @@ function buildPurgeSteps() {
     'crm_notifications', 'crm_tasks', 'crm_opportunities', 'crm_leads',
     'crm_conversations', 'crm_pipelines', 'crm_automation_rules', 'crm_integrations',
     'payments', 'invoices', 'vouchers',
-    'bookings', 'packages', 'routes', 'vehicles', 'catering_vendors', 'customers', 'hotels',
+    'bookings', 'packages', 'routes', 'vehicles', 'catering_vendors', 'hotels',
   ];
   const directSteps = directTables.map((t) => [t, `DELETE FROM ${t} WHERE "tenantId"=$1`]);
   // Finally: test users (non-admins) and custom (non-system) roles.
