@@ -14,7 +14,9 @@ const CONFIG_FIELDS = [
   { key: 'currency', label: 'Currency Code (e.g. SAR)', section: 'Financial', currencyField: true },
   { key: 'vat_percentage', label: 'VAT Percentage (%)', section: 'Financial', decimalField: true },
   { key: 'booking_tentative_days', label: 'Tentative Booking Expiry (Days)', section: 'Bookings', integerField: true },
-  { key: 'voucher_terms', label: 'Voucher & Invoice Terms and Conditions', section: 'Vouchers', multiline: true, wide: true, rows: 4 },
+  { key: 'terms_hotel_voucher', label: 'Hotel Voucher — Terms & Conditions (printed on hotel vouchers)', section: 'Vouchers', multiline: true, wide: true, rows: 3 },
+  { key: 'terms_transport_voucher', label: 'Transport Voucher — Terms & Conditions (printed on transport vouchers)', section: 'Vouchers', multiline: true, wide: true, rows: 3 },
+  { key: 'terms_invoice', label: 'Invoice — Terms & Conditions (printed on proforma & tax invoices)', section: 'Vouchers', multiline: true, wide: true, rows: 3 },
   { key: 'vehicle_types', label: 'Vehicle Types (comma-separated, e.g. BUS, CAR, VIP, SUV, VAN, COASTER)', section: 'Fleet', multiline: true, wide: true, rows: 2 },
 ];
 
@@ -28,7 +30,16 @@ export default function AdminConfigPage() {
 
   useEffect(() => {
     api.get('/config').then((r) => {
-      reset(r.data);
+      const data = { ...r.data };
+      // Seed the new per-document T&C fields from the legacy single key so admins
+      // see their existing terms (and can then split them) instead of blank boxes.
+      const legacy = (data.voucher_terms || '').trim();
+      if (legacy) {
+        for (const k of ['terms_hotel_voucher', 'terms_transport_voucher', 'terms_invoice']) {
+          if (!data[k] || !String(data[k]).trim()) data[k] = legacy;
+        }
+      }
+      reset(data);
     }).catch((err) => toast.error(err.response?.data?.error || 'Failed to load configuration')).finally(() => setLoading(false));
   }, []);
 

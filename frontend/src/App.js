@@ -21,7 +21,7 @@ import UsersPage from './pages/UsersPage';
 import CustomersPage from './pages/CustomersPage';
 import VoucherFormsPage from './pages/VoucherFormsPage';
 import RolesPage from './pages/RolesPage';
-import AdminConfigPage from './pages/AdminConfigPage';
+import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import DailySchedulePage from './pages/DailySchedulePage';
 import TransportReportPage from './pages/TransportReportPage';
@@ -30,7 +30,6 @@ import SuperAdminPlansPage from './pages/SuperAdminPlansPage';
 import SuperAdminApplicationsPage from './pages/SuperAdminApplicationsPage';
 import SuperAdminDiagnosticsPage from './pages/SuperAdminDiagnosticsPage';
 import SuperAdminHotelsPage from './pages/SuperAdminHotelsPage';
-import TenantSettingsPage from './pages/TenantSettingsPage';
 import PaymentStubPage from './pages/PaymentStubPage';
 import PayPalSuccessPage from './pages/PayPalSuccessPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -88,7 +87,9 @@ export default function App() {
           <Route path="fleet" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><FleetPage /></PrivateRoute>} />
           <Route path="reports/daily-schedule" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><DailySchedulePage /></PrivateRoute>} />
           <Route path="reports/transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><TransportReportPage /></PrivateRoute>} />
-          <Route path="tenant-settings" element={<PrivateRoute roles={['ADMIN']}><TenantSettingsPage /></PrivateRoute>} />
+          <Route path="settings" element={<PrivateRoute roles={['ADMIN']}><SettingsPage /></PrivateRoute>} />
+          {/* Old routes kept so existing links/bookmarks resolve to the merged page. */}
+          <Route path="tenant-settings" element={<PrivateRoute roles={['ADMIN']}><SettingsPage /></PrivateRoute>} />
           <Route path="packages" element={<PackagesPage />} />
           <Route path="bookings" element={<BookingsPage />} />
           <Route path="bookings/:id" element={<BookingDetailPage />} />
@@ -101,7 +102,7 @@ export default function App() {
           <Route path="payments" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><PaymentsPage /></PrivateRoute>} />
           <Route path="customers" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CustomersPage /></PrivateRoute>} />
           <Route path="users" element={<PrivateRoute roles={['ADMIN']}><UsersPage /></PrivateRoute>} />
-          <Route path="config" element={<PrivateRoute roles={['ADMIN']}><AdminConfigPage /></PrivateRoute>} />
+          <Route path="config" element={<PrivateRoute roles={['ADMIN']}><SettingsPage /></PrivateRoute>} />
           <Route path="profile" element={<ProfilePage />} />
           {/* CRM Module */}
           <Route path="crm" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CrmDashboardPage /></PrivateRoute>} />

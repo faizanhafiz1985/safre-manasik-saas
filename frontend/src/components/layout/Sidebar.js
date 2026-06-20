@@ -4,7 +4,7 @@ import { Box, List, ListItem, ListItemIcon, ListItemText, Typography, Divider } 
 import {
   Dashboard, CardTravel, BookOnline, DirectionsBus, Restaurant,
   Hotel, ConfirmationNumber, Payment, People, Settings, BarChart, EventNote,
-  SupervisorAccount, Business, Campaign, Leaderboard, ViewKanban,
+  SupervisorAccount, Campaign, Leaderboard, ViewKanban,
   AssignmentTurnedIn, Inbox, Tune, AdminPanelSettings, Receipt, Security,
   AccountBalanceWallet, DirectionsCar,
 } from '@mui/icons-material';
@@ -48,9 +48,8 @@ const navItems = [
   { label: 'CRM Reports',     icon: <BarChart />,           path: '/crm/reports',               roles: ['ADMIN'], section: 'crm', feature: 'crm_reports' },
   { label: 'Integrations',    icon: <Tune />,               path: '/crm/settings',              roles: ['ADMIN'], section: 'crm', feature: 'crm_settings' },
 
-  // Admin
-  { label: 'Tenant Settings', icon: <Business />,           path: '/tenant-settings',           roles: ['ADMIN'], feature: 'tenant_settings' },
-  { label: 'System Config',   icon: <Settings />,           path: '/config',                    roles: ['ADMIN'], feature: 'system_config' },
+  // Admin — Tenant Settings + System Config merged into a single tabbed page.
+  { label: 'Settings',        icon: <Settings />,           path: '/settings',                  roles: ['ADMIN'], features: ['tenant_settings', 'system_config'] },
 ];
 
 const roleLabel = {
@@ -82,6 +81,8 @@ export default function Sidebar({ onClose }) {
     if (!item.roles.includes(user?.role)) return false;          // role backstop
     if (item.section === 'platform') return true;                // platform tabs: role only
     if (hasPerms && item.feature) return perms.has(`${item.feature}:view`);
+    // A merged tab may map to several features — show it if ANY is permitted.
+    if (hasPerms && item.features) return item.features.some((f) => perms.has(`${f}:view`));
     return true;                                                 // fallback: role-based
   });
 

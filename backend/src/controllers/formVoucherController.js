@@ -27,10 +27,18 @@ async function getTenantFinancials(tenantId) {
   const pct = parseFloat(map.vat_percentage);
   const vatRate = (!isNaN(pct) && pct >= 0) ? pct / 100 : 0.15; // default 15%
   const currency = (map.currency || 'SAR').toUpperCase();
-  // Tenant-configurable voucher T&C (falls back to a sensible default when unset).
-  const terms = (map.voucher_terms && String(map.voucher_terms).trim())
-    || 'This voucher is subject to availability and the agency\'s booking policy.';
-  return { vatRate, currency, terms };
+  // Tenant-configurable T&C — now split per document type. Each falls back to the
+  // legacy single `voucher_terms` key (for tenants who set it before the split),
+  // then to a sensible default. New keys need no migration (free key-value store).
+  const clean = (k) => (map[k] && String(map[k]).trim()) || '';
+  const legacy = clean('voucher_terms');
+  const DEFAULT_VOUCHER = 'This voucher is subject to availability and the agency\'s booking policy.';
+  const DEFAULT_INVOICE = 'This invoice is issued in accordance with the agency\'s booking and payment policy.';
+  const termsHotel = clean('terms_hotel_voucher') || legacy || DEFAULT_VOUCHER;
+  const termsTransport = clean('terms_transport_voucher') || legacy || DEFAULT_VOUCHER;
+  const termsInvoice = clean('terms_invoice') || legacy || DEFAULT_INVOICE;
+  // `terms` kept for any legacy caller; defaults to the hotel-voucher value.
+  return { vatRate, currency, terms: termsHotel, termsHotel, termsTransport, termsInvoice };
 }
 
 // ── Atomic, gapless monthly invoice number: SAFPI/SAFAI + YYYY + MM + seq ──────
@@ -617,7 +625,7 @@ const printHtml = async (req, res, next) => {
   </table>
 
   <div class="terms">
-    <strong>Terms &amp; Conditions:</strong> ${esc(fin.terms)}
+    <strong>Terms &amp; Conditions:</strong> ${esc(v.type === 'HOTEL' ? fin.termsHotel : fin.termsTransport)}
     <br>${isCancelled
       ? 'This voucher has been <strong>CANCELLED</strong> and is no longer valid.'
       : (isConfirmed
@@ -705,7 +713,7 @@ const invoicePrintHtml = async (req, res, next) => {
   </div>
 
   <div class="terms">
-    <strong>Terms &amp; Conditions:</strong> ${esc(fin.terms)}
+    <strong>Terms &amp; Conditions:</strong> ${esc(fin.termsInvoice)}
     <br>${isProforma
       ? 'This is a <strong>PROFORMA INVOICE</strong> for a tentative booking and is not a valid tax invoice for payment claims.'
       : 'This is the <strong>TAX INVOICE</strong> for a confirmed booking.'}
