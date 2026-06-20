@@ -179,10 +179,23 @@ const login = async (req, res, next) => {
     if (!email || !email.trim()) return res.status(400).json({ error: 'Email is required' });
     if (!password) return res.status(400).json({ error: 'Password is required' });
 
-    const user = await runUnscoped(() => prisma.user.findUnique({
-      where: { email },
-      include: { tenant: { select: { id: true, name: true, slug: true, status: true, plan: true, logoUrl: true, primaryColor: true } } },
+    const cleanEmail = String(email).trim();
+    const tenantSelect = { tenant: { select: { id: true, name: true, slug: true, status: true, plan: true, logoUrl: true, primaryColor: true } } };
+
+    // Look up by exact email first; fall back to a case-insensitive match so a
+    // different-case or whitespace-padded entry (e.g. mobile auto-capitalisation
+    // or autofill) still resolves to the account. This mirrors the normalisation
+    // already used by the forgot-password / forgot-username flows.
+    let user = await runUnscoped(() => prisma.user.findUnique({
+      where: { email: cleanEmail },
+      include: tenantSelect,
     }));
+    if (!user) {
+      user = await runUnscoped(() => prisma.user.findFirst({
+        where: { email: { equals: cleanEmail, mode: 'insensitive' } },
+        include: tenantSelect,
+      }));
+    }
     if (!user || !user.isActive) return res.status(401).json({ error: 'Invalid credentials' });
     if (user.tenant && user.tenant.status === 'SUSPENDED') {
       return res.status(403).json({ error: 'Tenant suspended. Contact support.' });

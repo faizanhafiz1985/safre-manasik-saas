@@ -8,12 +8,22 @@ function cleanVehicleBody(body) {
   if ('driverId' in b) b.driverId = b.driverId ? String(b.driverId) : null;
   // Vehicle type is a free configurable string — normalise (trim + uppercase).
   if ('type' in b && b.type) b.type = String(b.type).trim().toUpperCase().slice(0, 40);
+  // Driver Iqama # — keep digits only, cap at 10 (validated below).
+  if ('driverIqama' in b && b.driverIqama != null) b.driverIqama = String(b.driverIqama).replace(/\D/g, '').slice(0, 10);
   for (const k of ['initialOdometer', 'oilChangeIntervalKm', 'lastOilChangeOdometer', 'capacity']) {
     if (k in b && b[k] !== undefined && b[k] !== null && b[k] !== '') b[k] = Math.max(0, parseInt(b[k], 10) || 0);
   }
   // currentOdometer is computed (initial + trip kms) — never accepted from input.
   delete b.currentOdometer;
   return b;
+}
+
+// Driver Iqama is mandatory and must be exactly 10 digits. Returns an error
+// string, or null when valid.
+function validateIqama(value) {
+  if (!value) return 'Driver Iqama # is required';
+  if (!/^\d{10}$/.test(String(value))) return 'Driver Iqama # must be exactly 10 digits';
+  return null;
 }
 
 const getVehicles = async (req, res, next) => {
@@ -47,6 +57,8 @@ const getVehicle = async (req, res, next) => {
 const createVehicle = async (req, res, next) => {
   try {
     const data = cleanVehicleBody(req.body);
+    const iqamaErr = validateIqama(data.driverIqama);
+    if (iqamaErr) return res.status(400).json({ error: iqamaErr });
     // New vehicle: current odometer starts at the initial baseline.
     data.currentOdometer = data.initialOdometer || 0;
     const vehicle = await prisma.vehicle.create({ data });
@@ -59,6 +71,11 @@ const createVehicle = async (req, res, next) => {
 const updateVehicle = async (req, res, next) => {
   try {
     const data = cleanVehicleBody(req.body);
+    // Iqama is mandatory; validate whenever it's part of the update payload.
+    if ('driverIqama' in data) {
+      const iqamaErr = validateIqama(data.driverIqama);
+      if (iqamaErr) return res.status(400).json({ error: iqamaErr });
+    }
     // Editing the initial baseline shifts the computed current odometer by the
     // same delta, preserving all accumulated trip kms.
     if ('initialOdometer' in data) {

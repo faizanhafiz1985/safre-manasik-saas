@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Card, CardContent, Grid, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Tabs, Tab, Chip, IconButton, Tooltip, Drawer, Divider, Autocomplete } from '@mui/material';
 import { Add, DirectionsBus, Route, Delete, AttachMoney, Build } from '@mui/icons-material';
 import api from '../services/api';
+import BulkImport from '../components/BulkImport';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useForm, Controller } from 'react-hook-form';
@@ -189,6 +190,9 @@ export default function TransportPage() {
         <Typography variant="h5">Transport Management</Typography>
         {isAdmin && (
           <Box sx={{ display: 'flex', gap: 1 }}>
+            {tab === 0
+              ? <BulkImport entity="vehicles" label="Vehicles" onDone={load} />
+              : <BulkImport entity="routes" label="Routes" onDone={load} />}
             <Button variant="outlined" startIcon={<Add />} onClick={() => openVehicle()}>Add Vehicle</Button>
             <Button variant="contained" startIcon={<Add />} onClick={() => openRoute()}>Add Route</Button>
           </Box>
@@ -220,6 +224,7 @@ export default function TransportPage() {
                       <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid #f1f5f9' }}>
                         <Typography variant="caption" display="block">Driver: {v.driverName}</Typography>
                         <Typography variant="caption" display="block" color="text.secondary">{v.driverPhone}</Typography>
+                        {v.driverIqama && <Typography variant="caption" display="block" color="text.secondary">Iqama #: {v.driverIqama}</Typography>}
                         <Typography variant="caption" display="block" color="text.secondary">
                           Initial Odo: {(v.initialOdometer || 0).toLocaleString()} km · <strong>Current Odo: {(v.currentOdometer || 0).toLocaleString()} km</strong>
                         </Typography>
@@ -328,6 +333,16 @@ export default function TransportPage() {
                   {...regV('driverPhone', {
                     required: 'Phone required',
                     pattern: { value: PHONE_SA, message: 'Must be 966XXXXXXXXX (12 digits, starts with 966)' },
+                  })} />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth label="Driver Iqama # *"
+                  error={!!errV.driverIqama}
+                  helperText={errV.driverIqama?.message || 'Exactly 10 digits (numeric only)'}
+                  inputProps={{ maxLength: 10, inputMode: 'numeric', onKeyDown: numericOnly }}
+                  {...regV('driverIqama', {
+                    required: 'Iqama # required',
+                    pattern: { value: /^\d{10}$/, message: 'Iqama # must be exactly 10 digits' },
                   })} />
               </Grid>
               <Grid item xs={12}>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Card, CardContent, Grid, Chip, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Tabs, Tab, Divider } from '@mui/material';
 import { Add, Restaurant } from '@mui/icons-material';
 import api from '../services/api';
+import BulkImport from '../components/BulkImport';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
@@ -70,6 +71,7 @@ export default function CateringPage() {
         <Typography variant="h5">Catering Management</Typography>
         {isAdmin && (
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <BulkImport entity="catering" label="Catering Vendors" onDone={load} />
             <Button variant="outlined" startIcon={<Add />} onClick={() => openVendor()}>Add Vendor</Button>
             <Button variant="contained" startIcon={<Add />} onClick={() => openMeal()}>Add Meal Plan</Button>
           </Box>

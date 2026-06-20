@@ -44,6 +44,7 @@ const paymentGatewayRoutes = require('./routes/paymentGateway');
 const crmRoutes = require('./routes/crm');
 const fleetRoutes = require('./routes/fleet');
 const crmWebhookRoutes = require('./routes/crmWebhooks');
+const importRoutes = require('./routes/import');
 
 const app = express();
 
@@ -115,6 +116,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/crm', crmRoutes);
 app.use('/api/fleet', fleetRoutes);
+app.use('/api/import', importRoutes);
 // CRM webhooks are public (Meta signature-verified internally)
 app.use('/api/crm/webhooks', crmWebhookRoutes);
 

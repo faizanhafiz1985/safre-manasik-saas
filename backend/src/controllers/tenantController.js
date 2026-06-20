@@ -2,6 +2,7 @@ const prisma = require('../config/database');
 const { getTenantId, runWithTenant } = require('../config/tenantContext');
 const { getTenantQuota } = require('../middleware/quota');
 const { invalidateTenantPaypal } = require('../services/paypalClient');
+const { purgeTenantData } = require('../utils/tenantPurge');
 
 // Mask the PayPal secret in any response — never return the raw value to the
 // browser. We keep a small "tail" so the admin can recognise which key is set.
@@ -125,4 +126,27 @@ const getCurrentQuota = async (req, res, next) => {
   }
 };
 
-module.exports = { getCurrent, updateCurrent, getCurrentQuota };
+// Self-service data purge — lets a tenant ADMIN wipe their OWN tenant's
+// operational/test data (bookings, packages, vehicles, hotels, customers,
+// payments, vouchers, fleet & CRM data, and non-admin users). The tenant
+// record, ADMIN logins, system roles and settings are preserved. The tenantId
+// is taken from the authenticated context — never from input — so an admin can
+// only ever purge their own tenant. Requires body.confirm === 'PURGE'.
+const purgeData = async (req, res, next) => {
+  try {
+    const tenantId = getTenantId();
+    if (!tenantId) return res.status(404).json({ error: 'No tenant in context' });
+    if ((req.body && req.body.confirm) !== 'PURGE') {
+      return res.status(400).json({ error: 'Confirmation required: send { "confirm": "PURGE" }' });
+    }
+    const results = await purgeTenantData(prisma, tenantId);
+    res.json({
+      message: 'All operational data has been purged. Your admin logins and settings were preserved.',
+      deleted: results,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getCurrent, updateCurrent, getCurrentQuota, purgeData };

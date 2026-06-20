@@ -10,6 +10,7 @@ import {
   Add, Search, Edit, Business, Person, Delete, Receipt, ExpandMore, PersonAdd,
 } from '@mui/icons-material';
 import api from '../services/api';
+import BulkImport from '../components/BulkImport';
 import { toast } from 'react-toastify';
 import { useForm, useWatch, useFieldArray, Controller } from 'react-hook-form';
 import { fmtDate } from '../utils/helpers';
@@ -181,7 +182,10 @@ export default function CustomersPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Customers</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={openCreate}>Add Customer</Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <BulkImport entity="customers" label="Customers" onDone={load} />
+          <Button variant="contained" startIcon={<Add />} onClick={openCreate}>Add Customer</Button>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>

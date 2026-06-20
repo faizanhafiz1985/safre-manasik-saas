@@ -4,6 +4,7 @@ import { Add, Search, Edit, Hotel, DirectionsBus, Restaurant, ExpandMore, CheckC
 import { useAuth } from '../context/AuthContext';
 import { useForm, useFieldArray } from 'react-hook-form';
 import api from '../services/api';
+import BulkImport from '../components/BulkImport';
 import { toast } from 'react-toastify';
 import { fmtCurrency } from '../utils/helpers';
 import { numericOnly, decimalOnly } from '../utils/validation';
@@ -87,7 +88,12 @@ export default function PackagesPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Umrah Packages</Typography>
-        {isAdmin && <Button variant="contained" startIcon={<Add />} onClick={openCreate}>New Package</Button>}
+        {isAdmin && (
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <BulkImport entity="packages" label="Packages" onDone={load} />
+            <Button variant="contained" startIcon={<Add />} onClick={openCreate}>New Package</Button>
+          </Box>
+        )}
       </Box>
 
       <TextField fullWidth placeholder="Search packages..." value={search} onChange={(e) => setSearch(e.target.value)} sx={{ mb: 3 }}

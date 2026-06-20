@@ -622,6 +622,7 @@ model Vehicle {
   driverName    String
   driverPhone   String
   driverLicense String?
+  driverIqama   String?     // Saudi Iqama # — exactly 10 digits (required on create/update)
   isAvailable   Boolean     @default(true)
   notes         String?
   createdAt     DateTime    @default(now())

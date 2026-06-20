@@ -499,6 +499,7 @@ async function ensureFleetTables() {
     // column to varchar (idempotent; safe to run if already varchar).
     try { await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ALTER COLUMN "type" TYPE VARCHAR(40) USING "type"::text`); } catch (e) { logger.warn(`[bootstrap] vehicle type->varchar: ${e.message}`); }
     // Fleet columns on existing vehicles table (idempotent).
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "driverIqama" VARCHAR(10)`);
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "driverId" VARCHAR(36)`);
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "currentOdometer" INTEGER NOT NULL DEFAULT 0`);
     // Initial odometer (admin-editable baseline). One-time backfill from the

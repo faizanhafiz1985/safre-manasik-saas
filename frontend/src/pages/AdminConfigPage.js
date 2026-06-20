@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Card, CardContent, Grid, TextField, Button, CircularProgress, Alert, Divider } from '@mui/material';
-import { Save, Settings } from '@mui/icons-material';
+import { Save, Settings, DeleteForever } from '@mui/icons-material';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
@@ -21,6 +21,9 @@ const CONFIG_FIELDS = [
 export default function AdminConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [purgeText, setPurgeText] = useState('');
+  const [purging, setPurging] = useState(false);
+  const [purgeResult, setPurgeResult] = useState(null);
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   useEffect(() => {
@@ -38,6 +41,27 @@ export default function AdminConfigPage() {
       toast.error(err.response?.data?.error || 'Failed to save configuration');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const doPurge = async () => {
+    if (purgeText !== 'PURGE') return;
+    if (!window.confirm(
+      'This permanently deletes ALL bookings, customers, packages, hotels, vehicles, payments, '
+      + 'vouchers, fleet and CRM data, plus non-admin users for your account. Your admin logins and '
+      + 'settings are kept. This CANNOT be undone. Continue?'
+    )) return;
+    setPurging(true);
+    setPurgeResult(null);
+    try {
+      const r = await api.post('/tenant/current/purge', { confirm: 'PURGE' });
+      setPurgeResult(r.data);
+      setPurgeText('');
+      toast.success('All operational data has been purged');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Purge failed');
+    } finally {
+      setPurging(false);
     }
   };
 
@@ -92,6 +116,50 @@ export default function AdminConfigPage() {
           {saving ? 'Saving...' : 'Save All Settings'}
         </Button>
       </form>
+
+      {/* ── Danger Zone: self-service data purge ─────────────────────────── */}
+      <Card sx={{ mt: 4, border: '1px solid', borderColor: 'error.light' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <DeleteForever color="error" />
+            <Typography variant="subtitle1" fontWeight={700} color="error.main">Danger Zone — Purge Data</Typography>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Permanently deletes <strong>all bookings, customers, packages, hotels, vehicles, payments,
+            vouchers, fleet and CRM data, and non-admin users</strong> for your account. Your admin logins,
+            roles and settings are preserved. <strong>This cannot be undone</strong> — use it to clear test
+            data before going live.
+          </Alert>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label='Type "PURGE" to confirm'
+                value={purgeText}
+                onChange={(e) => setPurgeText(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm="auto">
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<DeleteForever />}
+                disabled={purging || purgeText !== 'PURGE'}
+                onClick={doPurge}
+              >
+                {purging ? 'Purging…' : 'Purge All Data'}
+              </Button>
+            </Grid>
+          </Grid>
+          {purgeResult && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              {purgeResult.message || 'Data purged.'}
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   );
 }

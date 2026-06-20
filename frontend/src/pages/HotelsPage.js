@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Card, CardContent, Grid, Chip, TextField, MenuItem, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment } from '@mui/material';
 import { Add, Hotel, Search } from '@mui/icons-material';
 import api from '../services/api';
+import BulkImport from '../components/BulkImport';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
@@ -46,7 +47,12 @@ export default function HotelsPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5">Hotels</Typography>
-        {isAdmin && <Button variant="contained" startIcon={<Add />} onClick={openCreate}>Add Hotel</Button>}
+        {isAdmin && (
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <BulkImport entity="hotels" label="Hotels" onDone={load} />
+            <Button variant="contained" startIcon={<Add />} onClick={openCreate}>Add Hotel</Button>
+          </Box>
+        )}
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
