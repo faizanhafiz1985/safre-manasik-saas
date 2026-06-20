@@ -37,6 +37,11 @@ router.post('/login',
   [body('email').trim().isEmail(), body('password').notEmpty()],
   validate, ctrl.login);
 
+// Mobile session: exchange a refresh token for a fresh access token (rotating).
+router.post('/refresh', [body('refreshToken').notEmpty()], validate, ctrl.refresh);
+// Revoke a refresh token on logout (idempotent).
+router.post('/logout', ctrl.logout);
+
 // ── Forgot Username: user enters email → receives email with their account name
 router.post('/forgot-username',
   recoveryLimiter,

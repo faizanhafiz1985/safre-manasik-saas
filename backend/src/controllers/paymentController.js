@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const { getReceiptHtml } = require('../services/voucherService');
+const push = require('../services/pushService');
 
 const bookingInclude = {
   customer: { select: { id: true, name: true, email: true, phone: true } },
@@ -47,12 +48,21 @@ const recordPayment = async (req, res, next) => {
     if (!method) return res.status(400).json({ error: 'Payment method is required' });
 
     // Verify booking belongs to tenant
-    const booking = await prisma.booking.findFirst({ where: { id: bookingId }, select: { id: true } });
+    const booking = await prisma.booking.findFirst({ where: { id: bookingId }, select: { id: true, customerId: true, bookingRef: true, currency: true } });
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
     const payment = await prisma.payment.create({
       data: { bookingId, amount: parsedAmount, method, status: 'PAID', reference, notes },
     });
+
+    // Notify the customer's mobile devices that a payment was received.
+    if (booking.customerId) {
+      push.notifyUser(booking.customerId, {
+        title: 'Payment received',
+        body: `${booking.currency || 'SAR'} ${parsedAmount.toLocaleString()} recorded for booking ${booking.bookingRef}.`,
+        data: { type: 'payment_received', bookingId: booking.id, amount: String(parsedAmount) },
+      }).catch(() => {});
+    }
 
     const allPayments = await prisma.payment.aggregate({
       where: { bookingId },

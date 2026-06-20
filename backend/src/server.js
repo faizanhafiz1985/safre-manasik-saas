@@ -25,6 +25,7 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
+const deviceRoutes = require('./routes/devices');
 const voucherFormRoutes = require('./routes/voucherForms');
 const rbacRoutes = require('./routes/rbac');
 const packageRoutes = require('./routes/packages');
@@ -101,6 +102,7 @@ app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/payments/gateway', paymentGatewayRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/devices', deviceRoutes);
 app.use('/api/voucher-forms', voucherFormRoutes);
 app.use('/api/rbac', rbacRoutes);
 app.use('/api/packages', packageRoutes);

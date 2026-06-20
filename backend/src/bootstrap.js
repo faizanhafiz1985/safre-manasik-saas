@@ -108,6 +108,40 @@ async function dropLegacyCustomerTables() {
   }
 }
 
+// Mobile: device push tokens + rotating refresh tokens (idempotent).
+async function ensureMobileTables() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS devices (
+        id          VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"  VARCHAR(36)  NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        "userId"    VARCHAR(36)  NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+        token       TEXT         NOT NULL UNIQUE,
+        platform    VARCHAR(12)  NOT NULL DEFAULT 'android',
+        "createdAt" TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_devices_user ON devices("userId")`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id          VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "tenantId"  VARCHAR(36)  NOT NULL,
+        "userId"    VARCHAR(36)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "tokenHash" VARCHAR(64)  NOT NULL UNIQUE,
+        "expiresAt" TIMESTAMPTZ  NOT NULL,
+        "revokedAt" TIMESTAMPTZ,
+        "createdAt" TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens("userId")`);
+    logger.info('[bootstrap] devices + refresh_tokens tables ready');
+  } catch (err) {
+    logger.error(`[bootstrap] ensureMobileTables failed: ${err.message}`);
+  }
+}
+
 async function ensureVoucherFormTables() {
   try {
     // Add the selling-price column to the existing hotels table (idempotent).
@@ -555,6 +589,7 @@ async function runBootstrap() {
   await ensurePlanConfigs();
   await ensurePasswordResetTokensTable();
   await dropLegacyCustomerTables();
+  await ensureMobileTables();
   await ensureVoucherFormTables();
   await ensureInvoiceTables();
   await ensureBookingColumns();

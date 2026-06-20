@@ -260,6 +260,8 @@ model User {
   crmMessagesSent     CrmMessage[]            @relation("CrmMsgSender")
   crmNotifications    CrmNotification[]       @relation("CrmUserNotifications")
   passwordResetTokens PasswordResetToken[]
+  devices             Device[]
+  refreshTokens       RefreshToken[]
 
   // ── RBAC: optional custom role (overrides the legacy `role` enum when set) ──
   customRoleId String?
@@ -1327,6 +1329,42 @@ model PasswordResetToken {
   @@index([token])
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// ─── Mobile: device push tokens + refresh tokens ─────────────────────────────
+
+// A registered push target (FCM token). One row per device per user. Tenant-
+// scoped (in TENANT_MODELS) so registration auto-injects tenantId.
+model Device {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  token     String   @unique   // FCM registration token
+  platform  String   @default("android") // 'ios' | 'android' | 'web'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("devices")
+}
+
+// Long-lived, rotating refresh token (hash stored, never the raw value). Looked
+// up pre-auth by hash, so it is NOT tenant-scoped (not in TENANT_MODELS).
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tenantId  String
+  userId    String
+  tokenHash String    @unique   // sha256 of the raw token
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
 // ─── Platform Cost Monitor (SUPER_ADMIN) ─────────────────────────────────────

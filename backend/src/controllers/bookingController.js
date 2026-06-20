@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const { getTenantId } = require('../config/tenantContext');
+const push = require('../services/pushService');
 
 // Refs must be globally unique (bookingRef has a DB-level unique index).
 // Count ALL bookings/invoices across every tenant so the sequence never
@@ -262,6 +263,15 @@ const updateStatus = async (req, res, next) => {
     });
     if (result.count === 0) return res.status(404).json({ error: 'Booking not found' });
     const booking = await prisma.booking.findFirst({ where: { id: req.params.id }, include: bookingInclude });
+    // Notify the customer's mobile devices of the status change (fire-and-forget).
+    if (booking?.customerId) {
+      const label = { TENTATIVE: 'is tentative', CONFIRMED: 'is confirmed', CANCELLED: 'was cancelled' }[booking.status] || 'was updated';
+      push.notifyUser(booking.customerId, {
+        title: `Booking ${booking.bookingRef} ${label}`,
+        body: booking.package?.name ? `${booking.package.name}` : 'Tap to view your booking.',
+        data: { type: 'booking_status', bookingId: booking.id, status: booking.status },
+      }).catch(() => {});
+    }
     res.json(booking);
   } catch (err) {
     next(err);

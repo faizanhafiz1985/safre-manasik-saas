@@ -11,12 +11,30 @@ const {
   forgotUsernameHtml,
 } = require('../services/emailService');
 
-const generateToken = (user) =>
+const generateToken = (user, expiresIn) =>
   jwt.sign(
     { id: user.id, tenantId: user.tenantId, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: expiresIn || process.env.JWT_EXPIRES_IN || '7d' }
   );
+
+// ── Refresh tokens (mobile) ──────────────────────────────────────────────────
+// Web keeps the legacy 7-day access token and no refresh token (unchanged).
+// Mobile clients (login with { client: 'mobile' } or header X-Client: mobile)
+// get a short-lived access token + a rotating refresh token stored hashed.
+const REFRESH_DAYS = parseInt(process.env.REFRESH_TOKEN_DAYS, 10) || 30;
+const MOBILE_ACCESS_TTL = process.env.JWT_MOBILE_EXPIRES_IN || '1h';
+const isMobileClient = (req) => req.body?.client === 'mobile' || req.headers['x-client'] === 'mobile';
+const hashToken = (raw) => crypto.createHash('sha256').update(raw).digest('hex');
+
+const issueRefreshToken = async (user) => {
+  const raw = crypto.randomBytes(48).toString('hex');
+  const expiresAt = new Date(Date.now() + REFRESH_DAYS * 24 * 60 * 60 * 1000);
+  await runUnscoped(() => prisma.refreshToken.create({
+    data: { tenantId: user.tenantId, userId: user.id, tokenHash: hashToken(raw), expiresAt },
+  }));
+  return raw;
+};
 
 const slugify = (s) =>
   s.toLowerCase().trim()
@@ -209,7 +227,55 @@ const login = async (req, res, next) => {
     }));
 
     const { password: _, ...safeUser } = user;
-    res.json({ token: generateToken(user), user: safeUser });
+    // Web: unchanged 7-day token, no refresh token. Mobile: short access token
+    // + a refresh token it can use to renew without re-entering the password.
+    const mobile = isMobileClient(req);
+    const resp = { token: generateToken(user, mobile ? MOBILE_ACCESS_TTL : undefined), user: safeUser };
+    if (mobile) resp.refreshToken = await issueRefreshToken(user);
+    res.json(resp);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /auth/refresh — exchange a refresh token for a fresh access token ────
+// Rotates the refresh token (single-use): the presented token is revoked and a
+// new one issued. Reusing a revoked/expired token returns 401.
+const refresh = async (req, res, next) => {
+  try {
+    const raw = req.body.refreshToken;
+    if (!raw) return res.status(400).json({ error: 'Refresh token is required' });
+    const rec = await runUnscoped(() => prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(raw) } }));
+    if (!rec || rec.revokedAt || rec.expiresAt < new Date()) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+    const user = await runUnscoped(() => prisma.user.findUnique({
+      where: { id: rec.userId },
+      include: { tenant: { select: { status: true } } },
+    }));
+    if (!user || !user.isActive) return res.status(401).json({ error: 'Account is not active' });
+    if (user.tenant && user.tenant.status === 'SUSPENDED') return res.status(403).json({ error: 'Tenant suspended. Contact support.' });
+
+    // Rotate: revoke the used token, mint a new pair.
+    await runUnscoped(() => prisma.refreshToken.update({ where: { id: rec.id }, data: { revokedAt: new Date() } }));
+    const refreshToken = await issueRefreshToken(user);
+    res.json({ token: generateToken(user, MOBILE_ACCESS_TTL), refreshToken });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── POST /auth/logout — revoke a refresh token (idempotent) ───────────────────
+const logout = async (req, res, next) => {
+  try {
+    const raw = req.body.refreshToken;
+    if (raw) {
+      await runUnscoped(() => prisma.refreshToken.updateMany({
+        where: { tokenHash: hashToken(raw), revokedAt: null },
+        data: { revokedAt: new Date() },
+      }));
+    }
+    res.json({ message: 'Logged out' });
   } catch (err) {
     next(err);
   }
@@ -446,4 +512,4 @@ const resetPassword = async (req, res, next) => {
   }
 };
 
-module.exports = { signupTenant, register, login, me, changePassword, updateProfile, forgotUsername, forgotPassword, resetPassword };
+module.exports = { signupTenant, register, login, refresh, logout, me, changePassword, updateProfile, forgotUsername, forgotPassword, resetPassword };
