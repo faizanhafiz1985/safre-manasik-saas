@@ -22,30 +22,32 @@ const recoveryLimiter = rateLimit({
 });
 
 // Tenant signup: creates a new tenant + admin user
+// .trim() sanitises the email (strips stray spaces) before validation so a
+// space-padded entry isn't rejected outright.
 router.post('/signup-tenant',
-  [body('tenantName').notEmpty(), body('adminName').notEmpty(), body('adminEmail').isEmail(), body('adminPassword').isLength({ min: 8 })],
+  [body('tenantName').notEmpty(), body('adminName').notEmpty(), body('adminEmail').trim().isEmail(), body('adminPassword').isLength({ min: 8 })],
   validate, ctrl.signupTenant);
 
 // Customer register (needs tenantSlug to join an existing tenant)
 router.post('/register',
-  [body('name').notEmpty(), body('email').isEmail(), body('password').isLength({ min: 6 }), body('tenantSlug').notEmpty()],
+  [body('name').notEmpty(), body('email').trim().isEmail(), body('password').isLength({ min: 6 }), body('tenantSlug').notEmpty()],
   validate, ctrl.register);
 
 router.post('/login',
-  [body('email').isEmail(), body('password').notEmpty()],
+  [body('email').trim().isEmail(), body('password').notEmpty()],
   validate, ctrl.login);
 
 // ── Forgot Username: user enters email → receives email with their account name
 router.post('/forgot-username',
   recoveryLimiter,
-  [body('email').isEmail().withMessage('Valid email address is required')],
+  [body('email').trim().isEmail().withMessage('Valid email address is required')],
   validate,
   ctrl.forgotUsername);
 
 // ── Forgot Password: user enters email → receives secure reset link (DB token, single-use, 1h expiry)
 router.post('/forgot-password',
   recoveryLimiter,
-  [body('email').isEmail().withMessage('Valid email address is required')],
+  [body('email').trim().isEmail().withMessage('Valid email address is required')],
   validate,
   ctrl.forgotPassword);
 
