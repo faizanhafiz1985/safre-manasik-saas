@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Box, Typography, Button, Card, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Chip, TextField, InputAdornment, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Grid, TablePagination, Divider, FormControl, Select } from '@mui/material';
-import { Add, Search, Edit, Business, Person, Security, Delete } from '@mui/icons-material';
+import { Box, Typography, Button, Card, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Chip, TextField, InputAdornment, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, Grid, TablePagination, FormControl, Select } from '@mui/material';
+import { Add, Search, Edit, Security, Delete } from '@mui/icons-material';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { useForm, useWatch, Controller } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { fmtDate } from '../utils/helpers';
 import { PATTERNS, MESSAGES, alphaOnly } from '../utils/validation';
 
@@ -27,9 +27,6 @@ export default function UsersPage() {
   }, []);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
-  const watchedRole = useWatch({ control, name: 'role', defaultValue: 'CUSTOMER' });
-  const watchedType = useWatch({ control, name: 'customerType', defaultValue: 'B2C' });
-  const isB2B = watchedRole === 'CUSTOMER' && watchedType === 'B2B';
 
   const load = useCallback(() => {
     setLoading(true);
@@ -41,8 +38,8 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openCreate = () => { setEditing(null); reset({ role: 'CUSTOMER', customerType: 'B2C' }); setOpen(true); };
-  const openEdit   = (u) => { setEditing(u); reset({ ...u, customerType: u.customerType || 'B2C' }); setOpen(true); };
+  const openCreate = () => { setEditing(null); reset({ role: 'CUSTOMER' }); setOpen(true); };
+  const openEdit   = (u) => { setEditing(u); reset({ ...u }); setOpen(true); };
 
   const onSubmit = async (data) => {
     try {
@@ -122,7 +119,6 @@ export default function UsersPage() {
                   <TableCell>Email</TableCell>
                   <TableCell>Role</TableCell>
                   <TableCell>Assigned Role</TableCell>
-                  <TableCell>Type</TableCell>
                   <TableCell>Phone</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Joined</TableCell>
@@ -144,13 +140,6 @@ export default function UsersPage() {
                           </Select>
                         </FormControl>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      {u.role === 'CUSTOMER'
-                        ? <Chip icon={u.customerType === 'B2B' ? <Business fontSize="small" /> : <Person fontSize="small" />}
-                            label={u.customerType || 'B2C'} size="small"
-                            color={u.customerType === 'B2B' ? 'warning' : 'default'} />
-                        : '-'}
                     </TableCell>
                     <TableCell>{u.phone || '-'}</TableCell>
                     <TableCell><Chip label={u.isActive ? 'Active' : 'Inactive'} color={u.isActive ? 'success' : 'error'} size="small" /></TableCell>
@@ -203,41 +192,9 @@ export default function UsersPage() {
                 )} />
               </Grid>
 
-              {/* Customer Type — only shown for CUSTOMER role */}
-              {watchedRole === 'CUSTOMER' && (
-                <>
-                  <Grid item xs={12}>
-                    <Divider sx={{ mb: 1 }}><Typography variant="caption" color="text.secondary">Customer Classification</Typography></Divider>
-                    <Controller name="customerType" control={control} defaultValue="B2C" render={({ field }) => (
-                      <TextField fullWidth select label="Customer Type" {...field}>
-                        <MenuItem value="B2C"><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Person fontSize="small" /> B2C — Individual Customer</Box></MenuItem>
-                        <MenuItem value="B2B"><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Business fontSize="small" /> B2B — Corporate / Company</Box></MenuItem>
-                      </TextField>
-                    )} />
-                  </Grid>
-
-                  {isB2B && (
-                    <>
-                      <Grid item xs={12}><TextField fullWidth label="Company Name *" error={!!errors.companyName} helperText={errors.companyName?.message} {...register('companyName', { required: isB2B ? 'Company name required for B2B' : false, pattern: { value: PATTERNS.ALPHANUMERIC, message: MESSAGES.ALPHANUMERIC } })} /></Grid>
-                      <Grid item xs={6}><TextField fullWidth label="CR Number (Commercial Registration)" error={!!errors.crNumber} helperText={errors.crNumber?.message} {...register('crNumber', { required: isB2B ? 'CR# required for B2B' : false })} /></Grid>
-                      <Grid item xs={6}><TextField fullWidth label="VAT Number" {...register('vatNumber')} /></Grid>
-                      <Grid item xs={12}><TextField fullWidth label="Address" {...register('address')} /></Grid>
-                    </>
-                  )}
-
-                  {!isB2B && (
-                    <Grid item xs={12}><TextField fullWidth label="Company Name" error={!!errors.companyName} helperText={errors.companyName?.message} {...register('companyName', { pattern: { value: PATTERNS.ALPHANUMERIC, message: MESSAGES.ALPHANUMERIC } })} /></Grid>
-                  )}
-                </>
-              )}
-
-              {/* For AGENT/ADMIN roles */}
-              {watchedRole !== 'CUSTOMER' && (
-                <>
-                  <Grid item xs={12}><TextField fullWidth label="Company Name" error={!!errors.companyName} helperText={errors.companyName?.message} {...register('companyName', { pattern: { value: PATTERNS.ALPHANUMERIC, message: MESSAGES.ALPHANUMERIC } })} /></Grid>
-                  <Grid item xs={12}><TextField fullWidth label="Address" {...register('address')} /></Grid>
-                </>
-              )}
+              {/* Company / address — optional for any role */}
+              <Grid item xs={12}><TextField fullWidth label="Company Name (optional)" error={!!errors.companyName} helperText={errors.companyName?.message} {...register('companyName', { pattern: { value: PATTERNS.ALPHANUMERIC, message: MESSAGES.ALPHANUMERIC } })} /></Grid>
+              <Grid item xs={12}><TextField fullWidth label="Address (optional)" {...register('address')} /></Grid>
             </Grid>
           </DialogContent>
           <DialogActions>

@@ -183,19 +183,24 @@ const getAgents = async (req, res, next) => {
 
 const getCustomers = async (req, res, next) => {
   try {
-    const { search } = req.query;
+    // Booking customer-pickers call this without flags → active customers only,
+    // full list (no pagination). The Customers tab passes includeInactive=1 to
+    // also show disabled customers and uses the richer fields below.
+    const { search, includeInactive } = req.query;
     const customers = await prisma.user.findMany({
       where: {
         role: 'CUSTOMER',
-        isActive: true,
+        ...(includeInactive ? {} : { isActive: true }),
         ...(search && {
           OR: [
             { name: { contains: search, mode: 'insensitive' } },
             { email: { contains: search, mode: 'insensitive' } },
+            { phone: { contains: search, mode: 'insensitive' } },
+            { companyName: { contains: search, mode: 'insensitive' } },
           ],
         }),
       },
-      select: { id: true, name: true, email: true, phone: true },
+      select: { id: true, name: true, email: true, phone: true, companyName: true, isActive: true, createdAt: true },
       orderBy: { name: 'asc' },
     });
     res.json({ data: customers, total: customers.length });

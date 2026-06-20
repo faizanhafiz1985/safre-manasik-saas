@@ -4,7 +4,7 @@ import {
   Box, Typography, Button, Card, CardContent, TextField, InputAdornment, MenuItem,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
-  Grid, Autocomplete, IconButton, Tooltip, Divider,
+  Grid, Autocomplete, IconButton, Tooltip,
 } from '@mui/material';
 import { Add, Search, Visibility, PersonAdd } from '@mui/icons-material';
 import { Controller } from 'react-hook-form';
@@ -58,13 +58,11 @@ export default function BookingsPage() {
     register: regCust,
     handleSubmit: submitCust,
     reset: resetCust,
-    watch: watchCust,
     formState: { errors: custErrors },
   } = useForm();
-  const custType = watchCust('customerType', 'B2C');
 
   const openCustDialog = () => {
-    resetCust({ customerType: 'B2C' });
+    resetCust({});
     setCustOpen(true);
   };
 
@@ -352,28 +350,8 @@ export default function BookingsPage() {
                 <TextField fullWidth label="Phone" {...regCust('phone')} />
               </Grid>
               <Grid item xs={12}>
-                <Divider sx={{ mb: 1 }}>
-                  <Typography variant="caption" color="text.secondary">Type</Typography>
-                </Divider>
-                <TextField fullWidth select label="Customer Type" defaultValue="B2C" {...regCust('customerType')}>
-                  <MenuItem value="B2C">B2C — Individual</MenuItem>
-                  <MenuItem value="B2B">B2B — Corporate</MenuItem>
-                </TextField>
+                <TextField fullWidth label="Company (optional)" {...regCust('companyName')} />
               </Grid>
-              {custType === 'B2B' && (
-                <>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth label="Company Name *"
-                      error={!!custErrors.companyName} helperText={custErrors.companyName?.message}
-                      {...regCust('companyName', { required: 'Required for B2B' })}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField fullWidth label="CR Number" {...regCust('crNumber')} />
-                  </Grid>
-                </>
-              )}
             </Grid>
           </DialogContent>
           <DialogActions>
