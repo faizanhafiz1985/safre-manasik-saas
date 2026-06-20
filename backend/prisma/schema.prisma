@@ -1354,7 +1354,7 @@ model Device {
 // up pre-auth by hash, so it is NOT tenant-scoped (not in TENANT_MODELS).
 model RefreshToken {
   id        String    @id @default(uuid())
-  tenantId  String
+  tenantId  String?
   userId    String
   tokenHash String    @unique   // sha256 of the raw token
   expiresAt DateTime

@@ -127,7 +127,7 @@ async function ensureMobileTables() {
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS refresh_tokens (
         id          VARCHAR(36)  PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        "tenantId"  VARCHAR(36)  NOT NULL,
+        "tenantId"  VARCHAR(36),
         "userId"    VARCHAR(36)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         "tokenHash" VARCHAR(64)  NOT NULL UNIQUE,
         "expiresAt" TIMESTAMPTZ  NOT NULL,
@@ -135,6 +135,9 @@ async function ensureMobileTables() {
         "createdAt" TIMESTAMPTZ  NOT NULL DEFAULT NOW()
       )
     `);
+    // tenantId is nullable (platform/superadmin users have no tenant). Drop the
+    // NOT NULL if an earlier deploy created the column as NOT NULL.
+    await prisma.$executeRawUnsafe(`ALTER TABLE refresh_tokens ALTER COLUMN "tenantId" DROP NOT NULL`).catch(() => {});
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens("userId")`);
     logger.info('[bootstrap] devices + refresh_tokens tables ready');
   } catch (err) {
