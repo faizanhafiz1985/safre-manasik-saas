@@ -6,7 +6,9 @@ const QRCode = require('qrcode');
 const ALPHA = /^[A-Za-z؀-ۿ\s.'-]+$/;
 const ALPHANUM = /^[A-Za-z0-9]+$/;
 const DIGITS_12 = /^\d{12}$/;
-const ROOM_TYPES = ['Single', 'Double', 'Triple', 'Quad'];
+const ROOM_TYPES = ['Sharing', 'Double', 'Triple', 'Quad', 'Quint'];
+// Accept the legacy 'Single' value so vouchers created before the rename still save.
+const ACCEPTED_ROOM_TYPES = [...ROOM_TYPES, 'Single'];
 
 function esc(s) {
   return String(s ?? '')
@@ -158,7 +160,7 @@ function buildTrips(body, type) {
       const nights = Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate));
       const price = Number(t.perNightPrice || 0);
       const rooms = Math.max(1, parseInt(t.rooms, 10) || 1);
-      const roomType = ROOM_TYPES.includes(t.roomType) ? t.roomType : null;
+      const roomType = ACCEPTED_ROOM_TYPES.includes(t.roomType) ? t.roomType : null;
       const passengerCount = (t.passengerCount === undefined || t.passengerCount === null || t.passengerCount === '')
         ? null : Math.max(0, parseInt(t.passengerCount, 10) || 0);
       return {
@@ -206,7 +208,7 @@ function validateVoucher(body) {
       if (t.checkInDate && t.checkOutDate && nightsBetween(t.checkInDate, t.checkOutDate) <= 0) errors.push(`Trip ${n}: check-out must be after check-in`);
       if (t.perNightPrice === undefined || t.perNightPrice === '' || isNaN(Number(t.perNightPrice)) || Number(t.perNightPrice) < 0) errors.push(`Trip ${n}: per-night price is required (numeric)`);
       if (t.rooms !== undefined && t.rooms !== '' && (isNaN(Number(t.rooms)) || Number(t.rooms) < 1)) errors.push(`Trip ${n}: number of rooms must be at least 1`);
-      if (t.roomType && !ROOM_TYPES.includes(t.roomType)) errors.push(`Trip ${n}: room type must be one of ${ROOM_TYPES.join(', ')}`);
+      if (t.roomType && !ACCEPTED_ROOM_TYPES.includes(t.roomType)) errors.push(`Trip ${n}: room type must be one of ${ROOM_TYPES.join(', ')}`);
       if (t.passengerCount !== undefined && t.passengerCount !== '' && (isNaN(Number(t.passengerCount)) || Number(t.passengerCount) < 1)) errors.push(`Trip ${n}: number of passengers must be at least 1`);
     } else {
       const price = t.price ?? t.transportPrice;

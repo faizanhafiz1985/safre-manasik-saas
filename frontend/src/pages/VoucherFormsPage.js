@@ -18,7 +18,7 @@ const SAR = (n) => `SAR ${Number(n || 0).toLocaleString('en-US', { minimumFracti
 const D12 = /^\d{12}$/;
 const ALPHANUM = /^[A-Za-z0-9]+$/;
 const VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
-const ROOM_TYPES = ['Single', 'Double', 'Triple', 'Quad'];
+const ROOM_TYPES = ['Sharing', 'Double', 'Triple', 'Quad', 'Quint'];
 const STATUS_COLOR = { TENTATIVE: 'warning', CONFIRMED: 'success', CANCELLED: 'default' };
 
 const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', rooms: '1', roomType: '', passengerCount: '', perNightPrice: '' };
