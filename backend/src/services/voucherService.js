@@ -125,6 +125,9 @@ const getVoucherHtml = async (booking, type, voucherNo, tenant = {}) => {
   const madinahHotel = booking.package?.packageHotels?.find((ph) => ph.city === 'MADINAH')?.hotel;
   const transport    = booking.transports?.[0];
   const catering     = booking.caterings?.[0];
+  const hotelTrips     = Array.isArray(booking.hotelTrips) ? booking.hotelTrips : [];
+  const transportTrips = Array.isArray(booking.transportTrips) ? booking.transportTrips : [];
+  const cur            = booking.currency || 'SAR';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -272,6 +275,35 @@ const getVoucherHtml = async (booking, type, voucherNo, tenant = {}) => {
         ` : '<div style="color:#94a3b8;font-size:11px;padding:4px 0;">No hotel assigned</div>'}
       </div>
     </div>
+
+    ${(hotelTrips.length || transportTrips.length) ? `
+    <!-- Itinerary line-items -->
+    <div class="section">
+      <h3>Itinerary</h3>
+      ${hotelTrips.length ? `
+        <table style="width:100%;border-collapse:collapse;margin-bottom:8px;font-size:11px">
+          <thead><tr style="background:#1B4B35;color:#fff">
+            <th style="padding:5px 6px;text-align:left">Hotel</th><th style="padding:5px 6px">Check-in</th><th style="padding:5px 6px">Check-out</th>
+            <th style="padding:5px 6px">Rooms</th><th style="padding:5px 6px">Nights</th><th style="padding:5px 6px;text-align:right">Per Night</th><th style="padding:5px 6px;text-align:right">Line Total</th>
+          </tr></thead>
+          <tbody>${hotelTrips.map((t) => `<tr style="border-bottom:1px solid #eef2f6">
+              <td style="padding:5px 6px">${t.hotelName || ''}</td><td style="padding:5px 6px;text-align:center">${formatDate(t.checkInDate)}</td><td style="padding:5px 6px;text-align:center">${formatDate(t.checkOutDate)}</td>
+              <td style="padding:5px 6px;text-align:center">${t.rooms ?? 1}</td><td style="padding:5px 6px;text-align:center">${t.nights ?? ''}</td>
+              <td style="padding:5px 6px;text-align:right">${cur} ${Number(t.perNightPrice || 0).toFixed(2)}</td><td style="padding:5px 6px;text-align:right">${cur} ${Number(t.lineTotal || 0).toFixed(2)}</td>
+            </tr>`).join('')}</tbody>
+        </table>` : ''}
+      ${transportTrips.length ? `
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:#1B4B35;color:#fff">
+            <th style="padding:5px 6px;text-align:left">Vehicle</th><th style="padding:5px 6px">Route</th><th style="padding:5px 6px">Travel Date</th><th style="padding:5px 6px">Pax</th><th style="padding:5px 6px;text-align:right">Price</th>
+          </tr></thead>
+          <tbody>${transportTrips.map((t) => `<tr style="border-bottom:1px solid #eef2f6">
+              <td style="padding:5px 6px">${t.vehicleType || ''}</td><td style="padding:5px 6px">${(t.pickupLocation || '')} → ${(t.dropoffLocation || '')}</td>
+              <td style="padding:5px 6px;text-align:center">${formatDate(t.travelDate)}</td><td style="padding:5px 6px;text-align:center">${t.passengerCount || '—'}</td>
+              <td style="padding:5px 6px;text-align:right">${cur} ${Number(t.price || 0).toFixed(2)}</td>
+            </tr>`).join('')}</tbody>
+        </table>` : ''}
+    </div>` : ''}
 
     <!-- Transport + Catering -->
     <div class="grid-2">

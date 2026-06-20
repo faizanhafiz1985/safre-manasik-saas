@@ -54,6 +54,20 @@ const generateVoucher = async (req, res, next) => {
     const voucherType = (type || booking.status).toUpperCase();
     if (!['CONFIRMED', 'TENTATIVE'].includes(voucherType))
       return res.status(400).json({ error: 'Voucher type must be CONFIRMED or TENTATIVE' });
+
+    // Prevent accidental duplicates: one valid voucher per type per booking.
+    const existing = await prisma.voucher.findFirst({
+      where: { bookingId, type: voucherType, isValid: true },
+    });
+    if (existing) {
+      const label = voucherType === 'CONFIRMED' ? 'Confirmed' : 'Tentative';
+      return res.status(409).json({
+        error: `A ${label} voucher has already been generated for this booking${existing.voucherNo ? ` (${existing.voucherNo})` : ''}. It cannot be generated again.`,
+        code: 'VOUCHER_EXISTS',
+        voucherNo: existing.voucherNo,
+      });
+    }
+
     const voucherNo = await generateVoucherNo(voucherType);
 
     const voucher = await prisma.voucher.create({

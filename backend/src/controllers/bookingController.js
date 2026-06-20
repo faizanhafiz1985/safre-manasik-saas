@@ -36,6 +36,49 @@ const generateInvoiceNo = async () => {
   return `${prefix}${String(Number(count) + 1).padStart(4, '0')}`;
 };
 
+// ── Itinerary line-items (Direct-Voucher style) ───────────────────────────────
+// Build the persisted hotel/transport trip arrays with server-computed nights
+// and line totals, plus their summed value. Hotel line = rooms × nights × price.
+function nightsBetween(ci, co) {
+  if (!ci || !co) return 0;
+  const a = new Date(ci), b = new Date(co);
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return 0;
+  const d = Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+  return d > 0 ? d : 0;
+}
+function buildBookingTrips(body) {
+  const hotelTrips = (Array.isArray(body.hotelTrips) ? body.hotelTrips : [])
+    .filter((t) => t && (t.hotelName || t.hotelId || t.checkInDate || t.checkOutDate || t.perNightPrice))
+    .map((t) => {
+      const nights = nightsBetween(t.checkInDate, t.checkOutDate);
+      const rooms = Math.max(1, parseInt(t.rooms, 10) || 1);
+      const perNightPrice = Math.max(0, Number(t.perNightPrice) || 0);
+      return {
+        hotelId: t.hotelId || null,
+        hotelName: String(t.hotelName || '').trim(),
+        checkInDate: t.checkInDate || null,
+        checkOutDate: t.checkOutDate || null,
+        rooms, perNightPrice, nights,
+        lineTotal: rooms * nights * perNightPrice,
+      };
+    });
+  const transportTrips = (Array.isArray(body.transportTrips) ? body.transportTrips : [])
+    .filter((t) => t && (t.vehicleType || t.pickupLocation || t.dropoffLocation || t.travelDate || t.price))
+    .map((t) => {
+      const price = Math.max(0, Number(t.price) || 0);
+      return {
+        vehicleType: String(t.vehicleType || '').trim(),
+        pickupLocation: String(t.pickupLocation || '').trim(),
+        dropoffLocation: String(t.dropoffLocation || '').trim(),
+        travelDate: t.travelDate || null,
+        passengerCount: t.passengerCount ? Number(t.passengerCount) : null,
+        price, lineTotal: price,
+      };
+    });
+  const tripsTotal = [...hotelTrips, ...transportTrips].reduce((s, t) => s + (t.lineTotal || 0), 0);
+  return { hotelTrips, transportTrips, tripsTotal };
+}
+
 const bookingInclude = {
   customer: { select: { id: true, name: true, email: true, phone: true } },
   agent: { select: { id: true, name: true, companyName: true } },
@@ -114,8 +157,17 @@ const create = async (req, res, next) => {
     const pax = Number(totalPax);
     if (!pax || pax < 1) return res.status(400).json({ error: 'Total passengers must be at least 1' });
 
-    const amount = Number(totalAmount);
-    if (isNaN(amount) || amount < 0) return res.status(400).json({ error: 'Total amount must be a positive number' });
+    // Itinerary line-items: when present, they drive the booking total.
+    const { hotelTrips, transportTrips, tripsTotal } = buildBookingTrips(req.body);
+    const hasTrips = hotelTrips.length > 0 || transportTrips.length > 0;
+
+    let amount;
+    if (hasTrips) {
+      amount = tripsTotal;
+    } else {
+      amount = Number(totalAmount);
+      if (isNaN(amount) || amount < 0) return res.status(400).json({ error: 'Total amount must be a positive number' });
+    }
 
     const agentIdFinal = req.user.role === 'AGENT' ? req.user.id : agentId;
     const tenantId = getTenantId();
@@ -134,6 +186,8 @@ const create = async (req, res, next) => {
         totalPax: pax,
         totalAmount: amount,
         notes,
+        hotelTrips: hotelTrips.length ? hotelTrips : undefined,
+        transportTrips: transportTrips.length ? transportTrips : undefined,
         passengers: { create: (passengers || []).map((p) => ({
           ...p,
           ...(p.dateOfBirth && { dateOfBirth: new Date(p.dateOfBirth) }),
@@ -165,6 +219,12 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { status, notes, travelDateFrom, travelDateTo, totalPax, totalAmount } = req.body;
+
+    // If itinerary line-items are supplied, they drive the total.
+    const tripsProvided = 'hotelTrips' in req.body || 'transportTrips' in req.body;
+    const { hotelTrips, transportTrips, tripsTotal } = buildBookingTrips(req.body);
+    const hasTrips = hotelTrips.length > 0 || transportTrips.length > 0;
+
     const result = await prisma.booking.updateMany({
       where: { id: req.params.id },
       data: {
@@ -173,7 +233,8 @@ const update = async (req, res, next) => {
         ...(travelDateFrom && { travelDateFrom: new Date(travelDateFrom) }),
         ...(travelDateTo && { travelDateTo: new Date(travelDateTo) }),
         ...(totalPax && { totalPax: Number(totalPax) }),
-        ...(totalAmount && { totalAmount }),
+        ...(tripsProvided && { hotelTrips: hotelTrips.length ? hotelTrips : null, transportTrips: transportTrips.length ? transportTrips : null }),
+        ...(hasTrips ? { totalAmount: tripsTotal } : (totalAmount && { totalAmount })),
       },
     });
     if (result.count === 0) return res.status(404).json({ error: 'Booking not found' });

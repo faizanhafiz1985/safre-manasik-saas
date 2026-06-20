@@ -20,7 +20,7 @@ const ALPHANUM = /^[A-Za-z0-9]+$/;
 const VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
 const STATUS_COLOR = { TENTATIVE: 'warning', CONFIRMED: 'success', CANCELLED: 'default' };
 
-const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', perNightPrice: '' };
+const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', rooms: '1', perNightPrice: '' };
 const EMPTY_TRANSPORT_TRIP = { vehicleType: '', pickupLocation: '', dropoffLocation: '', travelDate: '', passengerCount: '', price: '' };
 const emptyTrip = (type) => (type === 'HOTEL' ? { ...EMPTY_HOTEL_TRIP } : { ...EMPTY_TRANSPORT_TRIP });
 const EMPTY = { type: 'HOTEL', companyName: '', firstName: '', lastName: '', mobile: '', whatsapp: '', passport: '', trips: [{ ...EMPTY_HOTEL_TRIP }] };
@@ -86,7 +86,7 @@ export default function VoucherFormsPage() {
       const d = r.data;
       const trips = Array.isArray(d.trips) && d.trips.length
         ? d.trips.map((t) => d.type === 'HOTEL'
-          ? { hotelId: t.hotelId || '', hotelName: t.hotelName || '', checkInDate: dateOnly(t.checkInDate), checkOutDate: dateOnly(t.checkOutDate), perNightPrice: t.perNightPrice != null ? String(t.perNightPrice) : '' }
+          ? { hotelId: t.hotelId || '', hotelName: t.hotelName || '', checkInDate: dateOnly(t.checkInDate), checkOutDate: dateOnly(t.checkOutDate), rooms: t.rooms != null ? String(t.rooms) : '1', perNightPrice: t.perNightPrice != null ? String(t.perNightPrice) : '' }
           : { vehicleType: t.vehicleType || '', pickupLocation: t.pickupLocation || '', dropoffLocation: t.dropoffLocation || '', travelDate: dateOnly(t.travelDate), passengerCount: t.passengerCount != null ? String(t.passengerCount) : '', price: t.price != null ? String(t.price) : '' })
         : [emptyTrip(d.type)];
       setForm({
@@ -96,7 +96,7 @@ export default function VoucherFormsPage() {
     } catch { toast.error('Failed to load voucher'); setOpen(false); }
   };
 
-  const tripTotal = (t) => isHotel ? nights(t.checkInDate, t.checkOutDate) * Number(t.perNightPrice || 0) : Number(t.price || 0);
+  const tripTotal = (t) => isHotel ? Math.max(1, Number(t.rooms || 1)) * nights(t.checkInDate, t.checkOutDate) * Number(t.perNightPrice || 0) : Number(t.price || 0);
   const liveTotal = (form.trips || []).reduce((s, t) => s + tripTotal(t), 0);
 
   const updateTrip = (idx, patch) => setForm((f) => ({ ...f, trips: f.trips.map((t, i) => i === idx ? { ...t, ...patch } : t) }));
@@ -123,6 +123,7 @@ export default function VoucherFormsPage() {
         if (!t.checkInDate) te.checkInDate = 'Required';
         if (!t.checkOutDate) te.checkOutDate = 'Required';
         if (t.checkInDate && t.checkOutDate && nights(t.checkInDate, t.checkOutDate) <= 0) te.checkOutDate = 'After check-in';
+        if (t.rooms === '' || isNaN(Number(t.rooms)) || Number(t.rooms) < 1) te.rooms = 'Min 1';
         if (t.perNightPrice === '' || isNaN(Number(t.perNightPrice))) te.perNightPrice = 'Required';
       } else {
         if (!t.vehicleType) te.vehicleType = 'Required';
@@ -340,7 +341,7 @@ export default function VoucherFormsPage() {
                   <Chip size="small" label={`Trip ${i + 1}`} />
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="caption" color="text.secondary">
-                      Subtotal: {SAR(tripTotal(t))}{isHotel ? ` (${nights(t.checkInDate, t.checkOutDate)} nights)` : ''}
+                      Subtotal: {SAR(tripTotal(t))}{isHotel ? ` (${Math.max(1, Number(t.rooms || 1))} room${Number(t.rooms) > 1 ? 's' : ''} × ${nights(t.checkInDate, t.checkOutDate)} nights)` : ''}
                     </Typography>
                     {form.trips.length > 1 && <IconButton size="small" color="error" onClick={() => removeTrip(i)}><Delete fontSize="small" /></IconButton>}
                   </Box>
@@ -364,9 +365,12 @@ export default function VoucherFormsPage() {
                           InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
                           inputProps={{ onKeyDown: numericOnly }} value={t.perNightPrice} onChange={(e) => updateTrip(i, { perNightPrice: e.target.value })} />
                       </Grid>
-                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-in Date *" InputLabelProps={{ shrink: true }}
+                      <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="No. of Rooms *"
+                        error={!!te.rooms} helperText={te.rooms || ''} inputProps={{ min: 1, onKeyDown: numericOnly }}
+                        value={t.rooms} onChange={(e) => updateTrip(i, { rooms: e.target.value })} /></Grid>
+                      <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="date" label="Check-in Date *" InputLabelProps={{ shrink: true }}
                         error={!!te.checkInDate} helperText={te.checkInDate} value={t.checkInDate} onChange={(e) => updateTrip(i, { checkInDate: e.target.value })} /></Grid>
-                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-out Date *" InputLabelProps={{ shrink: true }}
+                      <Grid item xs={12} sm={4}><TextField fullWidth size="small" type="date" label="Check-out Date *" InputLabelProps={{ shrink: true }}
                         inputProps={{ min: t.checkInDate || undefined }}
                         error={!!te.checkOutDate} helperText={te.checkOutDate} value={t.checkOutDate} onChange={(e) => updateTrip(i, { checkOutDate: e.target.value })} /></Grid>
                     </>

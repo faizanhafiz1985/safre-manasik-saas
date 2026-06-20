@@ -6,7 +6,7 @@ import {
   CircularProgress, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   Grid, Autocomplete, IconButton, Tooltip, Divider,
 } from '@mui/material';
-import { Add, Search, Visibility, PersonAdd } from '@mui/icons-material';
+import { Add, Search, Visibility, PersonAdd, Delete, Hotel as HotelIcon, DirectionsBus } from '@mui/icons-material';
 import { Controller } from 'react-hook-form';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,17 @@ import { toast } from 'react-toastify';
 import { useForm } from 'react-hook-form';
 import { fmtCurrency, fmtDate, statusChip } from '../utils/helpers';
 import { numericOnly, decimalOnly, PATTERNS, MESSAGES, alphaOnly } from '../utils/validation';
+
+const VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
+const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', rooms: '1', perNightPrice: '' };
+const EMPTY_TRANSPORT_TRIP = { vehicleType: '', pickupLocation: '', dropoffLocation: '', travelDate: '', passengerCount: '', price: '' };
+function tripNights(ci, co) {
+  if (!ci || !co) return 0;
+  const a = new Date(ci), b = new Date(co);
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return 0;
+  const d = Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+  return d > 0 ? d : 0;
+}
 
 export default function BookingsPage() {
   const { isAdmin, isAgent } = useAuth();
@@ -28,11 +39,37 @@ export default function BookingsPage() {
   const [open, setOpen]           = useState(false);
   const [packages, setPackages]   = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [hotels, setHotels]       = useState([]);
 
   // ─── Booking form ──────────────────────────────────────────────────────────
   const { register, handleSubmit, watch, reset, control, setValue, formState: { errors } } = useForm();
   const selectedPkg = watch('packageId');
   const [selectedPkgData, setSelectedPkgData] = useState(null);
+
+  // ─── Itinerary line-items (Direct-Voucher style) ──────────────────────────
+  const [hotelTrips, setHotelTrips] = useState([]);
+  const [transportTrips, setTransportTrips] = useState([]);
+
+  const hotelLine = (t) => Math.max(1, Number(t.rooms || 1)) * tripNights(t.checkInDate, t.checkOutDate) * Number(t.perNightPrice || 0);
+  const transportLine = (t) => Number(t.price || 0);
+  const tripsTotal = hotelTrips.reduce((s, t) => s + hotelLine(t), 0) + transportTrips.reduce((s, t) => s + transportLine(t), 0);
+  const hasTrips = hotelTrips.length > 0 || transportTrips.length > 0;
+
+  const addHotelTrip = () => setHotelTrips((a) => [...a, { ...EMPTY_HOTEL_TRIP }]);
+  const updateHotelTrip = (i, patch) => setHotelTrips((a) => a.map((t, idx) => idx === i ? { ...t, ...patch } : t));
+  const removeHotelTrip = (i) => setHotelTrips((a) => a.filter((_, idx) => idx !== i));
+  const onHotelPick = (i, hotelId) => {
+    const h = hotels.find((x) => x.id === hotelId);
+    updateHotelTrip(i, { hotelId, hotelName: h?.name || '', perNightPrice: h?.pricePerNight != null ? String(h.pricePerNight) : hotelTrips[i].perNightPrice });
+  };
+  const addTransportTrip = () => setTransportTrips((a) => [...a, { ...EMPTY_TRANSPORT_TRIP }]);
+  const updateTransportTrip = (i, patch) => setTransportTrips((a) => a.map((t, idx) => idx === i ? { ...t, ...patch } : t));
+  const removeTransportTrip = (i) => setTransportTrips((a) => a.filter((_, idx) => idx !== i));
+
+  // Keep the (disabled) Total Amount field in sync with the itinerary total.
+  useEffect(() => {
+    if (hasTrips) setValue('totalAmount', Number(tripsTotal.toFixed(2)));
+  }, [tripsTotal, hasTrips, setValue]);
 
   useEffect(() => {
     if (selectedPkg) setSelectedPkgData(packages.find((p) => p.id === selectedPkg));
@@ -83,20 +120,26 @@ export default function BookingsPage() {
     if (isAdmin || isAgent) {
       api.get('/packages').then((r) => setPackages(r.data.data || [])).catch(() => {});
       api.get('/users/customers').then((r) => setCustomers(r.data.data || [])).catch(() => {});
+      api.get('/hotels').then((r) => setHotels(Array.isArray(r.data) ? r.data : (r.data.data || []))).catch(() => {});
     }
   }, [isAdmin, isAgent]);
 
   const openCreate = () => {
     reset({ totalPax: 1, status: 'TENTATIVE' });
     setSelectedPkgData(null);
+    setHotelTrips([]);
+    setTransportTrips([]);
     setOpen(true);
   };
 
   const onSubmit = async (data) => {
     try {
       const tier = selectedPkgData?.priceTiers?.find((t) => t.id === data.priceTierId);
-      const amount = tier ? Number(tier.pricePerPax) * Number(data.totalPax) : data.totalAmount;
-      await api.post('/bookings', { ...data, totalAmount: amount, passengers: [] });
+      let amount;
+      if (hasTrips) amount = tripsTotal;
+      else if (tier) amount = Number(tier.pricePerPax) * Number(data.totalPax);
+      else amount = data.totalAmount;
+      await api.post('/bookings', { ...data, totalAmount: amount, hotelTrips, transportTrips, passengers: [] });
       toast.success('Booking created successfully');
       setOpen(false);
       load();
@@ -194,7 +237,7 @@ export default function BookingsPage() {
       </Card>
 
       {/* ─── Create Booking Dialog ───────────────────────────────────────── */}
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Create New Booking</DialogTitle>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogContent dividers>
@@ -277,10 +320,124 @@ export default function BookingsPage() {
               <Grid item xs={6}>
                 <TextField
                   fullWidth label="Total Amount (SAR)" type="number"
+                  disabled={hasTrips}
+                  helperText={hasTrips ? `Auto-calculated from itinerary: ${fmtCurrency(tripsTotal)}` : 'Enter manually for an ad-hoc booking'}
                   inputProps={{ min: 0, onKeyDown: decimalOnly }}
                   {...register('totalAmount', { valueAsNumber: true, min: { value: 0, message: 'Must be positive' } })}
                 />
               </Grid>
+
+              {/* ── Hotel Trips ─────────────────────────────────────────── */}
+              <Grid item xs={12}>
+                <Divider sx={{ mb: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <HotelIcon fontSize="small" /> Hotel Trips ({hotelTrips.length})
+                  </Typography>
+                  <Button size="small" startIcon={<Add />} variant="outlined" onClick={addHotelTrip}>Add Hotel</Button>
+                </Box>
+                {hotelTrips.map((t, i) => (
+                  <Card key={i} variant="outlined" sx={{ p: 1.5, mb: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Chip size="small" label={`Hotel ${i + 1}`} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {fmtCurrency(hotelLine(t))} ({Math.max(1, Number(t.rooms || 1))} rm × {tripNights(t.checkInDate, t.checkOutDate)} n)
+                        </Typography>
+                        <IconButton size="small" color="error" onClick={() => removeHotelTrip(i)}><Delete fontSize="small" /></IconButton>
+                      </Box>
+                    </Box>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField select fullWidth size="small" label="Hotel" value={t.hotelId} onChange={(e) => onHotelPick(i, e.target.value)}>
+                          {hotels.length === 0 && <MenuItem value="" disabled>No hotels — add hotels first</MenuItem>}
+                          {hotels.map((h) => <MenuItem key={h.id} value={h.id}>{h.name}{h.city ? ` — ${h.city}` : ''}</MenuItem>)}
+                        </TextField>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField fullWidth size="small" label="Per Night Price"
+                          InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
+                          inputProps={{ onKeyDown: decimalOnly }} value={t.perNightPrice}
+                          onChange={(e) => updateHotelTrip(i, { perNightPrice: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={4} sm={4}>
+                        <TextField fullWidth size="small" type="number" label="Rooms" inputProps={{ min: 1, onKeyDown: numericOnly }}
+                          value={t.rooms} onChange={(e) => updateHotelTrip(i, { rooms: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={8} sm={4}>
+                        <TextField fullWidth size="small" type="date" label="Check-in" InputLabelProps={{ shrink: true }}
+                          value={t.checkInDate} onChange={(e) => updateHotelTrip(i, { checkInDate: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField fullWidth size="small" type="date" label="Check-out" InputLabelProps={{ shrink: true }}
+                          inputProps={{ min: t.checkInDate || undefined }}
+                          value={t.checkOutDate} onChange={(e) => updateHotelTrip(i, { checkOutDate: e.target.value })} />
+                      </Grid>
+                    </Grid>
+                  </Card>
+                ))}
+              </Grid>
+
+              {/* ── Transport Trips ─────────────────────────────────────── */}
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <DirectionsBus fontSize="small" /> Transport Trips ({transportTrips.length})
+                  </Typography>
+                  <Button size="small" startIcon={<Add />} variant="outlined" onClick={addTransportTrip}>Add Transport</Button>
+                </Box>
+                {transportTrips.map((t, i) => (
+                  <Card key={i} variant="outlined" sx={{ p: 1.5, mb: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Chip size="small" label={`Transport ${i + 1}`} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">{fmtCurrency(transportLine(t))}</Typography>
+                        <IconButton size="small" color="error" onClick={() => removeTransportTrip(i)}><Delete fontSize="small" /></IconButton>
+                      </Box>
+                    </Box>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField select fullWidth size="small" label="Vehicle Type" value={t.vehicleType}
+                          onChange={(e) => updateTransportTrip(i, { vehicleType: e.target.value })}>
+                          {VEHICLE_TYPES.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
+                        </TextField>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField fullWidth size="small" type="date" label="Travel Date" InputLabelProps={{ shrink: true }}
+                          value={t.travelDate} onChange={(e) => updateTransportTrip(i, { travelDate: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField fullWidth size="small" label="Pickup Location" value={t.pickupLocation}
+                          onChange={(e) => updateTransportTrip(i, { pickupLocation: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField fullWidth size="small" label="Drop-off Location" value={t.dropoffLocation}
+                          onChange={(e) => updateTransportTrip(i, { dropoffLocation: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={6} sm={6}>
+                        <TextField fullWidth size="small" type="number" label="No. of Passengers" inputProps={{ min: 1, onKeyDown: numericOnly }}
+                          value={t.passengerCount} onChange={(e) => updateTransportTrip(i, { passengerCount: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={6} sm={6}>
+                        <TextField fullWidth size="small" label="Trip Price"
+                          InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
+                          inputProps={{ onKeyDown: decimalOnly }} value={t.price}
+                          onChange={(e) => updateTransportTrip(i, { price: e.target.value })} />
+                      </Grid>
+                    </Grid>
+                  </Card>
+                ))}
+              </Grid>
+
+              {hasTrips && (
+                <Grid item xs={12}>
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: '#0D2B1A', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body2">Itinerary Total ({hotelTrips.length + transportTrips.length} item{hotelTrips.length + transportTrips.length > 1 ? 's' : ''})</Typography>
+                    <Typography variant="h6" sx={{ color: '#C9A227', fontWeight: 800 }}>{fmtCurrency(tripsTotal)}</Typography>
+                  </Box>
+                </Grid>
+              )}
+
               <Grid item xs={12}>
                 <TextField fullWidth multiline rows={2} label="Notes" {...register('notes')} />
               </Grid>

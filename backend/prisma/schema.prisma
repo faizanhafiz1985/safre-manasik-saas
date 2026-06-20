@@ -571,6 +571,12 @@ model Booking {
   totalAmount    Decimal       @db.Decimal(10, 2)
   currency       String        @default("SAR")
   notes          String?
+  // Itinerary line-items (Direct-Voucher style). Each is a JSON array:
+  //   hotelTrips: { hotelId, hotelName, checkInDate, checkOutDate, rooms, perNightPrice, nights, lineTotal }
+  //   transportTrips: { vehicleType, pickupLocation, dropoffLocation, travelDate, passengerCount, price, lineTotal }
+  // When present, totalAmount is auto-computed from the sum of line totals.
+  hotelTrips     Json?
+  transportTrips Json?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

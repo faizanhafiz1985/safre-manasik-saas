@@ -30,6 +30,7 @@ export default function BookingDetailPage() {
   const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [mealPlans, setMealPlans] = useState([]);
+  const [vouchers, setVouchers] = useState([]);
 
   const { register: regPay, handleSubmit: hsPay, reset: resetPay } = useForm();
 
@@ -39,7 +40,11 @@ export default function BookingDetailPage() {
       setBooking(r.data);
       setNewStatus(r.data.status);
     }).catch((err) => toast.error(err.response?.data?.error || 'Failed to load booking')).finally(() => setLoading(false));
+    api.get('/vouchers', { params: { bookingId: id } }).then((r) => setVouchers(r.data || [])).catch(() => {});
   };
+
+  // A booking may hold at most one valid voucher of each type.
+  const hasVoucher = (type) => vouchers.some((v) => v.type === type && v.isValid !== false);
 
   useEffect(() => {
     load();
@@ -159,15 +164,19 @@ export default function BookingDetailPage() {
         <Button
           variant="outlined" startIcon={<ConfirmationNumber />}
           onClick={() => generateVoucher('TENTATIVE')}
+          disabled={hasVoucher('TENTATIVE')}
+          title={hasVoucher('TENTATIVE') ? 'A Tentative voucher has already been generated for this booking' : ''}
           sx={{ borderColor: '#C9A227', color: '#C9A227', '&:hover': { bgcolor: '#FFF8E6', borderColor: '#C9A227' } }}
         >
-          Tentative Voucher
+          {hasVoucher('TENTATIVE') ? 'Tentative Voucher ✓' : 'Tentative Voucher'}
         </Button>
         <Button
           variant="contained" startIcon={<ConfirmationNumber />}
           onClick={() => generateVoucher('CONFIRMED')}
+          disabled={hasVoucher('CONFIRMED')}
+          title={hasVoucher('CONFIRMED') ? 'A Confirmed voucher has already been generated for this booking' : ''}
         >
-          Confirmed Voucher
+          {hasVoucher('CONFIRMED') ? 'Confirmed Voucher ✓' : 'Confirmed Voucher'}
         </Button>
         <Button variant="outlined" startIcon={<Print />} onClick={() => previewVoucher(booking.status)}>Preview Voucher</Button>
         {(isAdmin || isAgent) && <Button variant="contained" startIcon={<Payment />} onClick={() => setPaymentDialog(true)}>Record Payment</Button>}
@@ -274,6 +283,60 @@ export default function BookingDetailPage() {
                     ))}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {(booking.hotelTrips?.length > 0 || booking.transportTrips?.length > 0) && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" gutterBottom>Itinerary</Typography>
+                {booking.hotelTrips?.length > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" fontWeight={700} color="primary.main">Hotel Trips</Typography>
+                    <Table size="small">
+                      <TableHead><TableRow>
+                        <TableCell>#</TableCell><TableCell>Hotel</TableCell><TableCell>Check-in</TableCell><TableCell>Check-out</TableCell>
+                        <TableCell align="center">Rooms</TableCell><TableCell align="center">Nights</TableCell>
+                        <TableCell align="right">Per Night</TableCell><TableCell align="right">Line Total</TableCell>
+                      </TableRow></TableHead>
+                      <TableBody>
+                        {booking.hotelTrips.map((t, i) => (
+                          <TableRow key={i}>
+                            <TableCell>{i + 1}</TableCell><TableCell>{t.hotelName}</TableCell>
+                            <TableCell>{fmtDate(t.checkInDate)}</TableCell><TableCell>{fmtDate(t.checkOutDate)}</TableCell>
+                            <TableCell align="center">{t.rooms ?? 1}</TableCell><TableCell align="center">{t.nights ?? ''}</TableCell>
+                            <TableCell align="right">{fmtCurrency(t.perNightPrice)}</TableCell><TableCell align="right">{fmtCurrency(t.lineTotal)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                )}
+                {booking.transportTrips?.length > 0 && (
+                  <Box>
+                    <Typography variant="caption" fontWeight={700} color="primary.main">Transport Trips</Typography>
+                    <Table size="small">
+                      <TableHead><TableRow>
+                        <TableCell>#</TableCell><TableCell>Vehicle</TableCell><TableCell>Route</TableCell>
+                        <TableCell>Travel Date</TableCell><TableCell align="center">Pax</TableCell><TableCell align="right">Price</TableCell>
+                      </TableRow></TableHead>
+                      <TableBody>
+                        {booking.transportTrips.map((t, i) => (
+                          <TableRow key={i}>
+                            <TableCell>{i + 1}</TableCell><TableCell>{t.vehicleType}</TableCell>
+                            <TableCell>{t.pickupLocation} → {t.dropoffLocation}</TableCell>
+                            <TableCell>{fmtDate(t.travelDate)}</TableCell>
+                            <TableCell align="center">{t.passengerCount || '—'}</TableCell>
+                            <TableCell align="right">{fmtCurrency(t.price)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>

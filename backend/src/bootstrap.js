@@ -251,6 +251,9 @@ async function ensureBookingColumns() {
     // Operational tracking flags on transport runs (schedule/transport reports).
     await prisma.$executeRawUnsafe(`ALTER TABLE booking_transports ADD COLUMN IF NOT EXISTS "departureDone" BOOLEAN NOT NULL DEFAULT false`);
     await prisma.$executeRawUnsafe(`ALTER TABLE booking_transports ADD COLUMN IF NOT EXISTS "transportAvailed" BOOLEAN NOT NULL DEFAULT false`);
+    // Direct-Voucher-style itinerary line-items on bookings (hotel + transport).
+    await prisma.$executeRawUnsafe(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "hotelTrips" JSONB`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "transportTrips" JSONB`);
     logger.info('[bootstrap] bookings.packageId nullable + booking_transports tracking flags ready');
   } catch (err) {
     logger.error(`[bootstrap] ensureBookingColumns failed: ${err.message}`);

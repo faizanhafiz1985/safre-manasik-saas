@@ -148,10 +148,11 @@ function buildTrips(body, type) {
     if (type === 'HOTEL') {
       const nights = Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate));
       const price = Number(t.perNightPrice || 0);
+      const rooms = Math.max(1, parseInt(t.rooms, 10) || 1);
       return {
         hotelId: t.hotelId || null, hotelName: String(t.hotelName || '').trim(),
         checkInDate: t.checkInDate, checkOutDate: t.checkOutDate,
-        perNightPrice: price, nights, lineTotal: nights * price,
+        perNightPrice: price, rooms, nights, lineTotal: rooms * nights * price,
       };
     }
     const price = Number(t.price ?? t.transportPrice ?? 0);
@@ -191,6 +192,7 @@ function validateVoucher(body) {
       if (!t.checkOutDate) errors.push(`Trip ${n}: check-out date is required`);
       if (t.checkInDate && t.checkOutDate && nightsBetween(t.checkInDate, t.checkOutDate) <= 0) errors.push(`Trip ${n}: check-out must be after check-in`);
       if (t.perNightPrice === undefined || t.perNightPrice === '' || isNaN(Number(t.perNightPrice)) || Number(t.perNightPrice) < 0) errors.push(`Trip ${n}: per-night price is required (numeric)`);
+      if (t.rooms !== undefined && t.rooms !== '' && (isNaN(Number(t.rooms)) || Number(t.rooms) < 1)) errors.push(`Trip ${n}: number of rooms must be at least 1`);
     } else {
       const price = t.price ?? t.transportPrice;
       if (!t.vehicleType || !String(t.vehicleType).trim()) errors.push(`Trip ${n}: vehicle type is required`);
@@ -486,13 +488,14 @@ function partyAndServiceTables(v, { accent, currency, showPrices }) {
     const trips = Array.isArray(v.trips) && v.trips.length ? v.trips
       : (v.hotelName ? [{ hotelName: v.hotelName, checkInDate: v.checkInDate, checkOutDate: v.checkOutDate, perNightPrice: v.perNightPrice, nights: nightsBetween(v.checkInDate, v.checkOutDate), lineTotal: subtotal }] : []);
     detailsTable = `<table style="margin-top:8px">
-      <thead><tr><th style="width:28px">#</th><th>Hotel</th><th>Check-in</th><th>Check-out</th><th style="text-align:center">Nights</th>
+      <thead><tr><th style="width:28px">#</th><th>Hotel</th><th>Check-in</th><th>Check-out</th><th style="text-align:center">Rooms</th><th style="text-align:center">Nights</th>
         ${showPrices ? '<th style="text-align:right">Per-night</th><th style="text-align:right">Line Total</th>' : ''}</tr></thead>
       <tbody>${trips.map((t, i) => `<tr>
           <td>${i + 1}</td><td>${esc(t.hotelName)}</td><td>${fmtDateLong(t.checkInDate)}</td><td>${fmtDateLong(t.checkOutDate)}</td>
+          <td style="text-align:center">${t.rooms ?? 1}</td>
           <td style="text-align:center">${t.nights ?? nightsBetween(t.checkInDate, t.checkOutDate)}</td>
-          ${showPrices ? `<td style="text-align:right">${fmtMoney(t.perNightPrice)}</td><td style="text-align:right">${fmtMoney(t.lineTotal ?? (Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate)) * Number(t.perNightPrice || 0)))}</td>` : ''}</tr>`).join('')}
-        ${showPrices ? `<tr><td colspan="6" style="text-align:right;font-weight:700;border-top:2px solid ${accent}">Subtotal</td>
+          ${showPrices ? `<td style="text-align:right">${fmtMoney(t.perNightPrice)}</td><td style="text-align:right">${fmtMoney(t.lineTotal ?? ((t.rooms ?? 1) * Math.max(0, nightsBetween(t.checkInDate, t.checkOutDate)) * Number(t.perNightPrice || 0)))}</td>` : ''}</tr>`).join('')}
+        ${showPrices ? `<tr><td colspan="7" style="text-align:right;font-weight:700;border-top:2px solid ${accent}">Subtotal</td>
             <td style="text-align:right;font-weight:800;color:${accent};border-top:2px solid ${accent}">${fmtMoney(subtotal)}</td></tr>` : ''}
       </tbody></table>`;
   } else {
