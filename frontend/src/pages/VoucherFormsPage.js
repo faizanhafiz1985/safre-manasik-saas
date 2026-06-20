@@ -18,9 +18,10 @@ const SAR = (n) => `SAR ${Number(n || 0).toLocaleString('en-US', { minimumFracti
 const D12 = /^\d{12}$/;
 const ALPHANUM = /^[A-Za-z0-9]+$/;
 const VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
+const ROOM_TYPES = ['Single', 'Double', 'Triple', 'Quad'];
 const STATUS_COLOR = { TENTATIVE: 'warning', CONFIRMED: 'success', CANCELLED: 'default' };
 
-const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', rooms: '1', perNightPrice: '' };
+const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', rooms: '1', roomType: '', passengerCount: '', perNightPrice: '' };
 const EMPTY_TRANSPORT_TRIP = { vehicleType: '', pickupLocation: '', dropoffLocation: '', travelDate: '', passengerCount: '', price: '' };
 const emptyTrip = (type) => (type === 'HOTEL' ? { ...EMPTY_HOTEL_TRIP } : { ...EMPTY_TRANSPORT_TRIP });
 const EMPTY = { type: 'HOTEL', companyName: '', firstName: '', lastName: '', mobile: '', whatsapp: '', passport: '', trips: [{ ...EMPTY_HOTEL_TRIP }] };
@@ -86,7 +87,7 @@ export default function VoucherFormsPage() {
       const d = r.data;
       const trips = Array.isArray(d.trips) && d.trips.length
         ? d.trips.map((t) => d.type === 'HOTEL'
-          ? { hotelId: t.hotelId || '', hotelName: t.hotelName || '', checkInDate: dateOnly(t.checkInDate), checkOutDate: dateOnly(t.checkOutDate), rooms: t.rooms != null ? String(t.rooms) : '1', perNightPrice: t.perNightPrice != null ? String(t.perNightPrice) : '' }
+          ? { hotelId: t.hotelId || '', hotelName: t.hotelName || '', checkInDate: dateOnly(t.checkInDate), checkOutDate: dateOnly(t.checkOutDate), rooms: t.rooms != null ? String(t.rooms) : '1', roomType: t.roomType || '', passengerCount: t.passengerCount != null ? String(t.passengerCount) : '', perNightPrice: t.perNightPrice != null ? String(t.perNightPrice) : '' }
           : { vehicleType: t.vehicleType || '', pickupLocation: t.pickupLocation || '', dropoffLocation: t.dropoffLocation || '', travelDate: dateOnly(t.travelDate), passengerCount: t.passengerCount != null ? String(t.passengerCount) : '', price: t.price != null ? String(t.price) : '' })
         : [emptyTrip(d.type)];
       setForm({
@@ -365,12 +366,20 @@ export default function VoucherFormsPage() {
                           InputProps={{ startAdornment: <InputAdornment position="start">SAR</InputAdornment> }}
                           inputProps={{ onKeyDown: numericOnly }} value={t.perNightPrice} onChange={(e) => updateTrip(i, { perNightPrice: e.target.value })} />
                       </Grid>
-                      <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="No. of Rooms *"
+                      <Grid item xs={4} sm={4}><TextField fullWidth size="small" type="number" label="No. of Rooms *"
                         error={!!te.rooms} helperText={te.rooms || ''} inputProps={{ min: 1, onKeyDown: numericOnly }}
                         value={t.rooms} onChange={(e) => updateTrip(i, { rooms: e.target.value })} /></Grid>
-                      <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="date" label="Check-in Date *" InputLabelProps={{ shrink: true }}
+                      <Grid item xs={4} sm={4}><TextField select fullWidth size="small" label="Room Type" error={!!te.roomType} helperText={te.roomType || ''}
+                        value={t.roomType} onChange={(e) => updateTrip(i, { roomType: e.target.value })}>
+                        <MenuItem value="">— select —</MenuItem>
+                        {ROOM_TYPES.map((rt) => <MenuItem key={rt} value={rt}>{rt}</MenuItem>)}
+                      </TextField></Grid>
+                      <Grid item xs={4} sm={4}><TextField fullWidth size="small" type="number" label="No. of Pax"
+                        error={!!te.passengerCount} helperText={te.passengerCount || ''} inputProps={{ min: 1, onKeyDown: numericOnly }}
+                        value={t.passengerCount} onChange={(e) => updateTrip(i, { passengerCount: e.target.value })} /></Grid>
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-in Date *" InputLabelProps={{ shrink: true }}
                         error={!!te.checkInDate} helperText={te.checkInDate} value={t.checkInDate} onChange={(e) => updateTrip(i, { checkInDate: e.target.value })} /></Grid>
-                      <Grid item xs={12} sm={4}><TextField fullWidth size="small" type="date" label="Check-out Date *" InputLabelProps={{ shrink: true }}
+                      <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Check-out Date *" InputLabelProps={{ shrink: true }}
                         inputProps={{ min: t.checkInDate || undefined }}
                         error={!!te.checkOutDate} helperText={te.checkOutDate} value={t.checkOutDate} onChange={(e) => updateTrip(i, { checkOutDate: e.target.value })} /></Grid>
                     </>
