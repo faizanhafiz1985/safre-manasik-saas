@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const QRCode = require('qrcode');
+const { getVoucherTerms } = require('../utils/voucherTerms');
 
 // ── ZATCA Phase-1 QR (TLV base64) ──────────────────────────────────────────
 const encodeTlvField = (tag, value) => {
@@ -128,6 +129,19 @@ const getVoucherHtml = async (booking, type, voucherNo, tenant = {}) => {
   const hotelTrips     = Array.isArray(booking.hotelTrips) ? booking.hotelTrips : [];
   const transportTrips = Array.isArray(booking.transportTrips) ? booking.transportTrips : [];
   const cur            = booking.currency || 'SAR';
+
+  // Tenant-configurable T&C. A booking voucher is a combined document, so it
+  // shows the Hotel terms and/or Transport terms for whichever services it
+  // includes (configured under System Config → Vouchers).
+  const escTerms = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const cfgTerms = await getVoucherTerms(booking.tenantId || tenant?.id);
+  const hasHotel = !!(makkahHotel || madinahHotel || hotelTrips.length);
+  const hasTransport = !!(transport || transportTrips.length);
+  const termParts = [];
+  if (hasHotel) termParts.push(escTerms(cfgTerms.termsHotel));
+  if (hasTransport) termParts.push(escTerms(cfgTerms.termsTransport));
+  if (!termParts.length) termParts.push(escTerms(cfgTerms.termsHotel));
+  const configuredTermsHtml = termParts.join('<br>');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -375,9 +389,8 @@ const getVoucherHtml = async (booking, type, voucherNo, tenant = {}) => {
     </div>
 
     <div class="terms">
-      <strong>Terms &amp; Conditions:</strong> This voucher is subject to availability. Services are as per the package.
-      Cancellation charges apply per policy.
-      ${isConfirmed
+      <strong>Terms &amp; Conditions:</strong> ${configuredTermsHtml}
+      <br>${isConfirmed
         ? 'All services on this <strong>CONFIRMED VOUCHER</strong> are booked and finalized.'
         : 'This is a <strong>TENTATIVE VOUCHER</strong> — confirmation and full payment are still pending.'}
     </div>

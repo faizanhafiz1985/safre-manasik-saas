@@ -218,7 +218,14 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const { status, notes, travelDateFrom, travelDateTo, totalPax, totalAmount } = req.body;
+    const { status, notes, travelDateFrom, travelDateTo, totalPax, totalAmount, customerId } = req.body;
+
+    // Switching the linked customer — validate it's a CUSTOMER in this tenant
+    // (the tenant middleware scopes the lookup, so cross-tenant ids can't match).
+    if (customerId) {
+      const cust = await prisma.user.findFirst({ where: { id: customerId, role: 'CUSTOMER' }, select: { id: true } });
+      if (!cust) return res.status(400).json({ error: 'Selected customer not found' });
+    }
 
     // If itinerary line-items are supplied, they drive the total.
     const tripsProvided = 'hotelTrips' in req.body || 'transportTrips' in req.body;
@@ -228,6 +235,7 @@ const update = async (req, res, next) => {
     const result = await prisma.booking.updateMany({
       where: { id: req.params.id },
       data: {
+        ...(customerId && { customerId }),
         ...(status && { status }),
         ...(notes !== undefined && { notes }),
         ...(travelDateFrom && { travelDateFrom: new Date(travelDateFrom) }),
