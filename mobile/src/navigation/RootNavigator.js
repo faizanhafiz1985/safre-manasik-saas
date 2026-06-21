@@ -21,6 +21,15 @@ import DirectVouchersScreen from '../screens/DirectVouchersScreen';
 import DirectVoucherDetailScreen from '../screens/DirectVoucherDetailScreen';
 import DirectVoucherFormScreen from '../screens/DirectVoucherFormScreen';
 import PrintWebViewScreen from '../screens/PrintWebViewScreen';
+import HotelsScreen from '../screens/HotelsScreen';
+import VehiclesScreen from '../screens/VehiclesScreen';
+import RoutesScreen from '../screens/RoutesScreen';
+import CateringVendorsScreen from '../screens/CateringVendorsScreen';
+import MealPlansScreen from '../screens/MealPlansScreen';
+import UsersScreen from '../screens/UsersScreen';
+import RolesScreen from '../screens/RolesScreen';
+import TenantSettingsScreen from '../screens/TenantSettingsScreen';
+import SystemConfigScreen from '../screens/SystemConfigScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
@@ -54,7 +63,16 @@ function MoreStack() {
       <MoreStackNav.Screen name="DirectVoucherForm" component={DirectVoucherFormScreen} options={{ title: t('newBooking') }} />
       <MoreStackNav.Screen name="Packages" component={PackagesScreen} options={{ title: t('packages') }} />
       <MoreStackNav.Screen name="Customers" component={CustomersScreen} options={{ title: t('customers') }} />
+      <MoreStackNav.Screen name="Hotels" component={HotelsScreen} options={{ title: t('hotels') }} />
+      <MoreStackNav.Screen name="Vehicles" component={VehiclesScreen} options={{ title: 'Vehicles' }} />
+      <MoreStackNav.Screen name="Routes" component={RoutesScreen} options={{ title: 'Routes' }} />
+      <MoreStackNav.Screen name="CateringVendors" component={CateringVendorsScreen} options={{ title: 'Catering Vendors' }} />
+      <MoreStackNav.Screen name="MealPlans" component={MealPlansScreen} options={{ title: 'Meal Plans' }} />
       <MoreStackNav.Screen name="Fleet" component={FleetScreen} options={{ title: t('fleet') }} />
+      <MoreStackNav.Screen name="Users" component={UsersScreen} options={{ title: 'Users' }} />
+      <MoreStackNav.Screen name="Roles" component={RolesScreen} options={{ title: 'Roles & Permissions' }} />
+      <MoreStackNav.Screen name="TenantSettings" component={TenantSettingsScreen} options={{ title: 'Tenant Settings' }} />
+      <MoreStackNav.Screen name="SystemConfig" component={SystemConfigScreen} options={{ title: 'System Config' }} />
       <MoreStackNav.Screen name="PrintWebView" component={PrintWebViewScreen} options={({ route }) => ({ title: route.params?.title || t('voucher') })} />
     </MoreStackNav.Navigator>
   );

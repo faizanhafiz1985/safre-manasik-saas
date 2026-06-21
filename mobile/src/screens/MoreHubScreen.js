@@ -7,9 +7,18 @@ import { COLORS } from '../theme';
 // and navigates within the "More" stack. New modules get added here per phase.
 const ITEMS = [
   { route: 'DirectVouchers', label: 'Direct Vouchers', glyph: '🧾', feature: 'voucher_forms' },
-  { route: 'Packages', label: 'Packages', glyph: '🧳', feature: 'packages' },
   { route: 'Customers', label: 'Customers', glyph: '👥', feature: 'customers' },
-  { route: 'Fleet', label: 'Fleet', glyph: '🚐', feature: 'fleet_trips' },
+  { route: 'Packages', label: 'Packages', glyph: '🧳', feature: 'packages' },
+  { route: 'Hotels', label: 'Hotels', glyph: '🏨', feature: 'hotels' },
+  { route: 'Vehicles', label: 'Vehicles', glyph: '🚐', feature: 'transport' },
+  { route: 'Routes', label: 'Routes', glyph: '🛣️', feature: 'transport' },
+  { route: 'CateringVendors', label: 'Catering Vendors', glyph: '🍽️', feature: 'catering' },
+  { route: 'MealPlans', label: 'Meal Plans', glyph: '🥘', feature: 'catering' },
+  { route: 'Fleet', label: 'Fleet', glyph: '🚍', feature: 'fleet_trips' },
+  { route: 'Users', label: 'Users', glyph: '🧑‍💼', feature: 'users' },
+  { route: 'Roles', label: 'Roles & Permissions', glyph: '🔐', feature: 'roles' },
+  { route: 'TenantSettings', label: 'Tenant Settings', glyph: '🏢', feature: 'tenant_settings' },
+  { route: 'SystemConfig', label: 'System Config', glyph: '⚙️', feature: 'system_config' },
 ];
 
 export default function MoreHubScreen({ navigation }) {
