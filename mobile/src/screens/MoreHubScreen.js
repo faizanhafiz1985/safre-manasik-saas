@@ -1,28 +1,36 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
+import { useI18n } from '../i18n';
 import { COLORS } from '../theme';
 
 // Hub for modules that don't warrant a bottom tab. Each row is permission-gated
-// and navigates within the "More" stack. New modules get added here per phase.
+// and navigates within the "More" stack. `tkey` maps to an i18n string.
 const ITEMS = [
-  { route: 'DirectVouchers', label: 'Direct Vouchers', glyph: '🧾', feature: 'voucher_forms' },
-  { route: 'Customers', label: 'Customers', glyph: '👥', feature: 'customers' },
-  { route: 'Packages', label: 'Packages', glyph: '🧳', feature: 'packages' },
-  { route: 'Hotels', label: 'Hotels', glyph: '🏨', feature: 'hotels' },
-  { route: 'Vehicles', label: 'Vehicles', glyph: '🚐', feature: 'transport' },
-  { route: 'Routes', label: 'Routes', glyph: '🛣️', feature: 'transport' },
-  { route: 'CateringVendors', label: 'Catering Vendors', glyph: '🍽️', feature: 'catering' },
-  { route: 'MealPlans', label: 'Meal Plans', glyph: '🥘', feature: 'catering' },
-  { route: 'Fleet', label: 'Fleet', glyph: '🚍', feature: 'fleet_trips' },
-  { route: 'Users', label: 'Users', glyph: '🧑‍💼', feature: 'users' },
-  { route: 'Roles', label: 'Roles & Permissions', glyph: '🔐', feature: 'roles' },
-  { route: 'TenantSettings', label: 'Tenant Settings', glyph: '🏢', feature: 'tenant_settings' },
-  { route: 'SystemConfig', label: 'System Config', glyph: '⚙️', feature: 'system_config' },
+  { route: 'DirectVouchers', tkey: 'directVouchers', glyph: '🧾', feature: 'voucher_forms' },
+  { route: 'Customers', tkey: 'customers', glyph: '👥', feature: 'customers' },
+  { route: 'Packages', tkey: 'packages', glyph: '🧳', feature: 'packages' },
+  { route: 'Hotels', tkey: 'hotels', glyph: '🏨', feature: 'hotels' },
+  { route: 'Vehicles', tkey: 'vehicles', glyph: '🚐', feature: 'transport' },
+  { route: 'Routes', tkey: 'routes', glyph: '🛣️', feature: 'transport' },
+  { route: 'CateringVendors', tkey: 'cateringVendors', glyph: '🍽️', feature: 'catering' },
+  { route: 'MealPlans', tkey: 'mealPlans', glyph: '🥘', feature: 'catering' },
+  { route: 'Fleet', tkey: 'fleet', glyph: '🚍', feature: 'fleet_trips' },
+  { route: 'CrmLeads', tkey: 'leads', glyph: '🎯', feature: 'crm_leads' },
+  { route: 'CrmPipeline', tkey: 'pipeline', glyph: '📊', feature: 'crm_pipeline' },
+  { route: 'CrmTasks', tkey: 'tasks', glyph: '✅', feature: 'crm_tasks' },
+  { route: 'CrmInbox', tkey: 'inbox', glyph: '💬', feature: 'crm_inbox' },
+  { route: 'DailySchedule', tkey: 'dailySchedule', glyph: '📅', feature: 'daily_schedule' },
+  { route: 'TransportReport', tkey: 'transportReport', glyph: '📈', feature: 'transport_report' },
+  { route: 'Users', tkey: 'users', glyph: '🧑‍💼', feature: 'users' },
+  { route: 'Roles', tkey: 'roles', glyph: '🔐', feature: 'roles' },
+  { route: 'TenantSettings', tkey: 'tenantSettings', glyph: '🏢', feature: 'tenant_settings' },
+  { route: 'SystemConfig', tkey: 'systemConfig', glyph: '⚙️', feature: 'system_config' },
 ];
 
 export default function MoreHubScreen({ navigation }) {
   const { can } = useAuth();
+  const { t } = useI18n();
   const visible = ITEMS.filter((it) => can(it.feature, 'view'));
 
   return (
@@ -30,7 +38,7 @@ export default function MoreHubScreen({ navigation }) {
       {visible.map((it) => (
         <TouchableOpacity key={it.route} style={styles.row} onPress={() => navigation.navigate(it.route)}>
           <Text style={styles.glyph}>{it.glyph}</Text>
-          <Text style={styles.label}>{it.label}</Text>
+          <Text style={styles.label}>{t(it.tkey)}</Text>
           <Text style={styles.chev}>›</Text>
         </TouchableOpacity>
       ))}

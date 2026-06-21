@@ -43,9 +43,17 @@ Push needs a development build, not Expo Go. Full step‑by‑step (EAS login, F
 - API base URL: `app.json → expo.extra.apiBaseUrl` (defaults to production).
 - App identifiers: `com.safremanasik.app` (change in `app.json` before store builds).
 
+## Web parity — implemented
+Dashboard; Bookings (+ itinerary editor); Direct Vouchers (create/confirm/pay/print);
+Customers; Packages; Hotels; Vehicles; Routes; Catering (vendors + meal plans); Fleet
+(view + log trip / submit cash); Users; Roles & Permissions (matrix); Tenant Settings;
+System Config; CRM (Leads, Pipeline, Tasks, Inbox); Reports (Daily Schedule, Transport).
+All permission-gated via the "More" hub. Arabic/RTL toggle covers nav, tabs, hub and
+titles (deep per-field form translation is incremental). Push notifications deep-link to
+the relevant screen on tap.
+
 ## Next (not yet built)
 - **Native online payments** — Apple Pay / Mada via the Moyasar SDK and native PayPal
   (currently online pay hands off to the secure web checkout in an in‑app browser).
-- Full Arabic translation of every screen (infra + core strings are in place).
-- Fleet write actions (log trip / submit cash), booking itinerary editing on mobile,
-  push deep‑linking from notification taps.
+- Full per-field Arabic translation of every form (infra + nav/titles are done).
+- Store release (needs your Apple/Google developer accounts).

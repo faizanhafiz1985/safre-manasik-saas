@@ -17,6 +17,10 @@ const STRINGS = {
     logTrip: 'Log Trip', submitCash: 'Submit Cash', maintenance: 'Maintenance',
     home: 'Home', more: 'More', directVouchers: 'Direct Vouchers', revenue: 'Revenue',
     hotels: 'Hotels', transport: 'Transport', catering: 'Catering', confirm: 'Confirm',
+    vehicles: 'Vehicles', routes: 'Routes', cateringVendors: 'Catering Vendors', mealPlans: 'Meal Plans',
+    users: 'Users', roles: 'Roles & Permissions', tenantSettings: 'Tenant Settings', systemConfig: 'System Config',
+    leads: 'CRM · Leads', pipeline: 'CRM · Pipeline', tasks: 'CRM · Tasks', inbox: 'CRM · Inbox',
+    dailySchedule: 'Daily Schedule', transportReport: 'Transport Report',
   },
   ar: {
     bookings: 'الحجوزات', packages: 'الباقات', profile: 'الملف الشخصي', customers: 'العملاء', fleet: 'الأسطول',
@@ -29,6 +33,10 @@ const STRINGS = {
     logTrip: 'تسجيل رحلة', submitCash: 'تسليم النقد', maintenance: 'الصيانة',
     home: 'الرئيسية', more: 'المزيد', directVouchers: 'القسائم المباشرة', revenue: 'الإيرادات',
     hotels: 'الفنادق', transport: 'النقل', catering: 'التموين', confirm: 'تأكيد',
+    vehicles: 'المركبات', routes: 'المسارات', cateringVendors: 'موردو التموين', mealPlans: 'خطط الوجبات',
+    users: 'المستخدمون', roles: 'الأدوار والصلاحيات', tenantSettings: 'إعدادات المؤسسة', systemConfig: 'إعدادات النظام',
+    leads: 'العملاء المحتملون', pipeline: 'مسار المبيعات', tasks: 'المهام', inbox: 'الوارد',
+    dailySchedule: 'الجدول اليومي', transportReport: 'تقرير النقل',
   },
 };
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../auth/AuthContext';
@@ -30,7 +30,16 @@ import UsersScreen from '../screens/UsersScreen';
 import RolesScreen from '../screens/RolesScreen';
 import TenantSettingsScreen from '../screens/TenantSettingsScreen';
 import SystemConfigScreen from '../screens/SystemConfigScreen';
+import CrmLeadsScreen from '../screens/CrmLeadsScreen';
+import CrmTasksScreen from '../screens/CrmTasksScreen';
+import CrmPipelineScreen from '../screens/CrmPipelineScreen';
+import CrmInboxScreen from '../screens/CrmInboxScreen';
+import CrmConversationScreen from '../screens/CrmConversationScreen';
+import DailyScheduleScreen from '../screens/DailyScheduleScreen';
+import TransportReportScreen from '../screens/TransportReportScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+
+export const navigationRef = createNavigationContainerRef();
 
 const Stack = createNativeStackNavigator();
 const BookingsStackNav = createNativeStackNavigator();
@@ -64,15 +73,22 @@ function MoreStack() {
       <MoreStackNav.Screen name="Packages" component={PackagesScreen} options={{ title: t('packages') }} />
       <MoreStackNav.Screen name="Customers" component={CustomersScreen} options={{ title: t('customers') }} />
       <MoreStackNav.Screen name="Hotels" component={HotelsScreen} options={{ title: t('hotels') }} />
-      <MoreStackNav.Screen name="Vehicles" component={VehiclesScreen} options={{ title: 'Vehicles' }} />
-      <MoreStackNav.Screen name="Routes" component={RoutesScreen} options={{ title: 'Routes' }} />
-      <MoreStackNav.Screen name="CateringVendors" component={CateringVendorsScreen} options={{ title: 'Catering Vendors' }} />
-      <MoreStackNav.Screen name="MealPlans" component={MealPlansScreen} options={{ title: 'Meal Plans' }} />
+      <MoreStackNav.Screen name="Vehicles" component={VehiclesScreen} options={{ title: t('vehicles') }} />
+      <MoreStackNav.Screen name="Routes" component={RoutesScreen} options={{ title: t('routes') }} />
+      <MoreStackNav.Screen name="CateringVendors" component={CateringVendorsScreen} options={{ title: t('cateringVendors') }} />
+      <MoreStackNav.Screen name="MealPlans" component={MealPlansScreen} options={{ title: t('mealPlans') }} />
       <MoreStackNav.Screen name="Fleet" component={FleetScreen} options={{ title: t('fleet') }} />
-      <MoreStackNav.Screen name="Users" component={UsersScreen} options={{ title: 'Users' }} />
-      <MoreStackNav.Screen name="Roles" component={RolesScreen} options={{ title: 'Roles & Permissions' }} />
-      <MoreStackNav.Screen name="TenantSettings" component={TenantSettingsScreen} options={{ title: 'Tenant Settings' }} />
-      <MoreStackNav.Screen name="SystemConfig" component={SystemConfigScreen} options={{ title: 'System Config' }} />
+      <MoreStackNav.Screen name="Users" component={UsersScreen} options={{ title: t('users') }} />
+      <MoreStackNav.Screen name="Roles" component={RolesScreen} options={{ title: t('roles') }} />
+      <MoreStackNav.Screen name="TenantSettings" component={TenantSettingsScreen} options={{ title: t('tenantSettings') }} />
+      <MoreStackNav.Screen name="SystemConfig" component={SystemConfigScreen} options={{ title: t('systemConfig') }} />
+      <MoreStackNav.Screen name="CrmLeads" component={CrmLeadsScreen} options={{ title: t('leads') }} />
+      <MoreStackNav.Screen name="CrmTasks" component={CrmTasksScreen} options={{ title: t('tasks') }} />
+      <MoreStackNav.Screen name="CrmPipeline" component={CrmPipelineScreen} options={{ title: t('pipeline') }} />
+      <MoreStackNav.Screen name="CrmInbox" component={CrmInboxScreen} options={{ title: t('inbox') }} />
+      <MoreStackNav.Screen name="CrmConversation" component={CrmConversationScreen} options={{ title: 'Conversation' }} />
+      <MoreStackNav.Screen name="DailySchedule" component={DailyScheduleScreen} options={{ title: t('dailySchedule') }} />
+      <MoreStackNav.Screen name="TransportReport" component={TransportReportScreen} options={{ title: t('transportReport') }} />
       <MoreStackNav.Screen name="PrintWebView" component={PrintWebViewScreen} options={({ route }) => ({ title: route.params?.title || t('voucher') })} />
     </MoreStackNav.Navigator>
   );
@@ -107,7 +123,7 @@ export default function RootNavigator() {
     );
   }
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? <Stack.Screen name="App" component={AppTabs} /> : <Stack.Screen name="Login" component={LoginScreen} />}
       </Stack.Navigator>
