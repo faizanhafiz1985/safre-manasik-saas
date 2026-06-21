@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import api from '../api/client';
 import { COLORS } from '../theme';
 
 const STATUS_COLOR = { CONFIRMED: COLORS.success, TENTATIVE: COLORS.gold, CANCELLED: COLORS.danger };
 
-export default function BookingsScreen() {
+export default function BookingsScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +36,7 @@ export default function BookingsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
       ListEmptyComponent={<Text style={styles.muted}>{error || 'No bookings yet.'}</Text>}
       renderItem={({ item }) => (
-        <View style={styles.card}>
+        <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => navigation.navigate('BookingDetail', { id: item.id })}>
           <View style={styles.row}>
             <Text style={styles.ref}>{item.bookingRef}</Text>
             <Text style={[styles.badge, { backgroundColor: STATUS_COLOR[item.status] || COLORS.textMuted }]}>{item.status}</Text>
@@ -44,7 +44,7 @@ export default function BookingsScreen() {
           <Text style={styles.name}>{item.customer?.name || '—'}</Text>
           <Text style={styles.meta}>{item.package?.name || 'Ad-hoc'} • {item.totalPax} pax</Text>
           <Text style={styles.amount}>{item.currency || 'SAR'} {Number(item.totalAmount || 0).toLocaleString()}</Text>
-        </View>
+        </TouchableOpacity>
       )}
     />
   );

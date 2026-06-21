@@ -8,13 +8,28 @@ import { COLORS } from '../theme';
 import LoginScreen from '../screens/LoginScreen';
 import PackagesScreen from '../screens/PackagesScreen';
 import BookingsScreen from '../screens/BookingsScreen';
+import BookingDetailScreen from '../screens/BookingDetailScreen';
+import VoucherScreen from '../screens/VoucherScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
+const BookingsStackNav = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Simple text-emoji tab icon to avoid extra icon-font setup in the scaffold.
 const tabIcon = (glyph) => ({ color }) => <Text style={{ fontSize: 18, color }}>{glyph}</Text>;
+
+const greenHeader = { headerStyle: { backgroundColor: COLORS.greenDark }, headerTintColor: '#fff' };
+
+function BookingsStack() {
+  return (
+    <BookingsStackNav.Navigator screenOptions={greenHeader}>
+      <BookingsStackNav.Screen name="BookingsList" component={BookingsScreen} options={{ title: 'Bookings' }} />
+      <BookingsStackNav.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking' }} />
+      <BookingsStackNav.Screen name="Voucher" component={VoucherScreen} options={({ route }) => ({ title: `${route.params?.ref || 'Voucher'}` })} />
+    </BookingsStackNav.Navigator>
+  );
+}
 
 function AppTabs() {
   const { can } = useAuth();
@@ -28,7 +43,7 @@ function AppTabs() {
       }}
     >
       {can('bookings', 'view') && (
-        <Tab.Screen name="Bookings" component={BookingsScreen} options={{ tabBarIcon: tabIcon('📋') }} />
+        <Tab.Screen name="Bookings" component={BookingsStack} options={{ headerShown: false, tabBarIcon: tabIcon('📋') }} />
       )}
       {can('packages', 'view') && (
         <Tab.Screen name="Packages" component={PackagesScreen} options={{ tabBarIcon: tabIcon('🧳') }} />

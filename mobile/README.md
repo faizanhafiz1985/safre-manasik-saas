@@ -8,7 +8,7 @@ Phase‑3 scaffold for the Android + iOS app, wired to the live API
 - **Auto‑refresh** — axios interceptor refreshes on `401` (rotating) and retries; hard failure → back to Login.
 - **Role/permission‑aware navigation** — tabs show based on the user's `permissions[]` from `/auth/me`.
 - **Push registration** — registers the device's FCM/APNs token via `POST /devices` after login.
-- **Live screens** — Login, Bookings (`GET /bookings`), Packages (`GET /packages`), Profile (+ logout).
+- **Live screens** — Login, Bookings list (`GET /bookings`) → **Booking detail** (`GET /bookings/:id`) → **Voucher viewer** (WebView of the server‑rendered voucher), Packages (`GET /packages`), Profile (+ logout).
 
 ## Run it
 ```bash
@@ -22,6 +22,11 @@ npx expo start
 Then press **a** (Android emulator) / **i** (iOS simulator), or scan the QR code.
 
 Sign in with any tenant user (ADMIN/AGENT/CUSTOMER). The tabs and data adapt to the role.
+
+## Dev build (push notifications)
+Push needs a development build, not Expo Go. Full step‑by‑step (EAS login, Firebase
+`google-services.json`, build, install, test) is in [`DEV_BUILD.md`](./DEV_BUILD.md).
+`eas.json` and `expo-dev-client` are already set up.
 
 ## Push notifications — important
 - Push needs a **Dev Build or production build**, *not* Expo Go. Create one with:
@@ -37,5 +42,5 @@ Sign in with any tenant user (ADMIN/AGENT/CUSTOMER). The tabs and data adapt to 
 - App identifiers: `com.safremanasik.app` (change in `app.json` before store builds).
 
 ## Next (not yet built)
-- Booking detail + create/edit, voucher/invoice WebView, online payments (PayPal/Moyasar/Apple Pay),
-  Customers (staff), Fleet (driver), Arabic RTL/i18n, app icon & splash art.
+- Create/edit booking, online payments (PayPal/Moyasar/Apple Pay), Customers (staff),
+  Fleet (driver), Arabic RTL/i18n, app icon & splash art.
