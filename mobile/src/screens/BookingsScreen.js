@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useCallback, useLayoutEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import api from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { COLORS } from '../theme';
@@ -36,7 +37,8 @@ export default function BookingsScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Reload whenever the screen regains focus (e.g. after creating a booking).
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.green} /></View>;
 

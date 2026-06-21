@@ -36,7 +36,9 @@ export default function BookingFormScreen({ route, navigation }) {
 
   const submit = async () => {
     if (!form.customerId) return Alert.alert('Required', 'Select a customer.');
-    if (!form.travelDateFrom || !form.travelDateTo) return Alert.alert('Required', 'Enter departure and return dates (YYYY-MM-DD).');
+    const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s).getTime());
+    if (!dateOk(form.travelDateFrom) || !dateOk(form.travelDateTo)) return Alert.alert('Invalid dates', 'Enter departure and return as YYYY-MM-DD.');
+    if (form.travelDateTo < form.travelDateFrom) return Alert.alert('Invalid dates', 'Return date cannot be before departure.');
     const payload = {
       customerId: form.customerId,
       packageId: form.packageId || undefined,

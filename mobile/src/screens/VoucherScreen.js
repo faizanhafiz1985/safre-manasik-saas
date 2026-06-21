@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
+import api from '../api/client';
 import { getAccessToken } from '../auth/storage';
 import { API_BASE_URL } from '../config';
 import { COLORS } from '../theme';
@@ -13,6 +14,9 @@ export default function VoucherScreen({ route }) {
 
   useEffect(() => {
     (async () => {
+      // Touch an authed endpoint first so the interceptor refreshes the access
+      // token if it has expired — the WebView URL can't refresh on its own.
+      try { await api.get('/auth/me'); } catch { /* ignore */ }
       const token = await getAccessToken();
       setUri(`${API_BASE_URL}/vouchers/preview/${id}?type=${type}&token=${encodeURIComponent(token || '')}`);
     })();

@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Modal,
   TextInput, Alert, RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as WebBrowser from 'expo-web-browser';
 import api from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -33,7 +34,7 @@ export default function PaymentsScreen({ route }) {
     } finally { setLoading(false); setRefreshing(false); }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const record = async () => {
     const amt = Number(amount);

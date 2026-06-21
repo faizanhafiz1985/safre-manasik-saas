@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import api from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { COLORS } from '../theme';
@@ -25,7 +26,8 @@ export default function BookingDetailScreen({ route, navigation }) {
     } finally { setLoading(false); setRefreshing(false); }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  // Refresh on focus so edits / recorded payments show immediately on return.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.green} /></View>;
   if (!b) return <View style={styles.center}><Text style={styles.muted}>{error || 'Not found'}</Text></View>;

@@ -26,7 +26,8 @@ export default function CustomersScreen() {
     } finally { setLoading(false); setRefreshing(false); }
   }, [search]);
 
-  useEffect(() => { load(); }, [load]);
+  // Debounce so typing in the search box doesn't fire a request per keystroke.
+  useEffect(() => { const id = setTimeout(load, 350); return () => clearTimeout(id); }, [load]);
 
   const save = async () => {
     if (!form.name.trim()) return Alert.alert('Required', 'Name is required.');
