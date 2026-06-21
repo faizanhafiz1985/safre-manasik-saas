@@ -7,7 +7,12 @@ import RootNavigator from './src/navigation/RootNavigator';
 
 // Show notifications while the app is foregrounded.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
 });
 
 export default function App() {
