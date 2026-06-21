@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import api from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { COLORS } from '../theme';
 
 const STATUS_COLOR = { CONFIRMED: COLORS.success, TENTATIVE: COLORS.gold, CANCELLED: COLORS.danger };
@@ -8,6 +9,7 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-di
 
 export default function BookingDetailScreen({ route, navigation }) {
   const { id } = route.params;
+  const { isStaff } = useAuth();
   const [b, setB] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,7 +88,16 @@ export default function BookingDetailScreen({ route, navigation }) {
       )}
 
       <View style={{ padding: 12 }}>
-        <Text style={styles.sectionTitle}>Voucher</Text>
+        <Text style={styles.sectionTitle}>Actions</Text>
+        <TouchableOpacity style={styles.btnOutline} onPress={() => navigation.navigate('Payments', { id })}>
+          <Text style={styles.btnOutlineText}>Payments & Invoice</Text>
+        </TouchableOpacity>
+        {isStaff && b.status !== 'CANCELLED' && (
+          <TouchableOpacity style={[styles.btnOutline, { marginTop: 10 }]} onPress={() => navigation.navigate('BookingForm', { booking: b })}>
+            <Text style={styles.btnOutlineText}>Edit Booking</Text>
+          </TouchableOpacity>
+        )}
+        <Text style={[styles.sectionTitle, { marginTop: 18 }]}>Voucher</Text>
         <TouchableOpacity style={styles.btnOutline} onPress={() => navigation.navigate('Voucher', { id, type: 'TENTATIVE', ref: b.bookingRef })}>
           <Text style={styles.btnOutlineText}>View Tentative Voucher</Text>
         </TouchableOpacity>

@@ -1,11 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useLayoutEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import api from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { COLORS } from '../theme';
 
 const STATUS_COLOR = { CONFIRMED: COLORS.success, TENTATIVE: COLORS.gold, CANCELLED: COLORS.danger };
 
 export default function BookingsScreen({ navigation }) {
+  const { isStaff } = useAuth();
+  useLayoutEffect(() => {
+    if (isStaff) {
+      navigation.setOptions({
+        headerRight: () => (
+          <TouchableOpacity onPress={() => navigation.navigate('BookingForm', {})} style={{ paddingHorizontal: 12 }}>
+            <Text style={{ color: COLORS.gold, fontWeight: '700', fontSize: 15 }}>＋ New</Text>
+          </TouchableOpacity>
+        ),
+      });
+    }
+  }, [navigation, isStaff]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

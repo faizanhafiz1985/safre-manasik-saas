@@ -4,35 +4,42 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../auth/AuthContext';
+import { useI18n } from '../i18n';
 import { COLORS } from '../theme';
 import LoginScreen from '../screens/LoginScreen';
 import PackagesScreen from '../screens/PackagesScreen';
 import BookingsScreen from '../screens/BookingsScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
+import BookingFormScreen from '../screens/BookingFormScreen';
 import VoucherScreen from '../screens/VoucherScreen';
+import PaymentsScreen from '../screens/PaymentsScreen';
+import CustomersScreen from '../screens/CustomersScreen';
+import FleetScreen from '../screens/FleetScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
 const BookingsStackNav = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Simple text-emoji tab icon to avoid extra icon-font setup in the scaffold.
 const tabIcon = (glyph) => ({ color }) => <Text style={{ fontSize: 18, color }}>{glyph}</Text>;
-
 const greenHeader = { headerStyle: { backgroundColor: COLORS.greenDark }, headerTintColor: '#fff' };
 
 function BookingsStack() {
+  const { t } = useI18n();
   return (
     <BookingsStackNav.Navigator screenOptions={greenHeader}>
-      <BookingsStackNav.Screen name="BookingsList" component={BookingsScreen} options={{ title: 'Bookings' }} />
-      <BookingsStackNav.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking' }} />
-      <BookingsStackNav.Screen name="Voucher" component={VoucherScreen} options={({ route }) => ({ title: `${route.params?.ref || 'Voucher'}` })} />
+      <BookingsStackNav.Screen name="BookingsList" component={BookingsScreen} options={{ title: t('bookings') }} />
+      <BookingsStackNav.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: t('booking') }} />
+      <BookingsStackNav.Screen name="BookingForm" component={BookingFormScreen} options={{ title: t('newBooking') }} />
+      <BookingsStackNav.Screen name="Payments" component={PaymentsScreen} options={{ title: t('payments') }} />
+      <BookingsStackNav.Screen name="Voucher" component={VoucherScreen} options={({ route }) => ({ title: route.params?.ref || t('voucher') })} />
     </BookingsStackNav.Navigator>
   );
 }
 
 function AppTabs() {
   const { can } = useAuth();
+  const { t } = useI18n();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -43,12 +50,18 @@ function AppTabs() {
       }}
     >
       {can('bookings', 'view') && (
-        <Tab.Screen name="Bookings" component={BookingsStack} options={{ headerShown: false, tabBarIcon: tabIcon('📋') }} />
+        <Tab.Screen name="Bookings" component={BookingsStack} options={{ headerShown: false, tabBarLabel: t('bookings'), tabBarIcon: tabIcon('📋') }} />
       )}
       {can('packages', 'view') && (
-        <Tab.Screen name="Packages" component={PackagesScreen} options={{ tabBarIcon: tabIcon('🧳') }} />
+        <Tab.Screen name="Packages" component={PackagesScreen} options={{ title: t('packages'), tabBarLabel: t('packages'), tabBarIcon: tabIcon('🧳') }} />
       )}
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarIcon: tabIcon('👤') }} />
+      {can('customers', 'view') && (
+        <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t('customers'), tabBarLabel: t('customers'), tabBarIcon: tabIcon('👥') }} />
+      )}
+      {can('fleet_trips', 'view') && (
+        <Tab.Screen name="Fleet" component={FleetScreen} options={{ title: t('fleet'), tabBarLabel: t('fleet'), tabBarIcon: tabIcon('🚐') }} />
+      )}
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: t('profile'), tabBarLabel: t('profile'), tabBarIcon: tabIcon('👤') }} />
     </Tab.Navigator>
   );
 }
