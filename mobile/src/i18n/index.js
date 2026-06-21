@@ -15,6 +15,8 @@ const STRINGS = {
     recordPayment: 'Record Payment', payOnline: 'Pay Online', amount: 'Amount', balance: 'Balance',
     addCustomer: 'Add Customer', name: 'Name', company: 'Company', status: 'Status',
     logTrip: 'Log Trip', submitCash: 'Submit Cash', maintenance: 'Maintenance',
+    home: 'Home', more: 'More', directVouchers: 'Direct Vouchers', revenue: 'Revenue',
+    hotels: 'Hotels', transport: 'Transport', catering: 'Catering', confirm: 'Confirm',
   },
   ar: {
     bookings: 'الحجوزات', packages: 'الباقات', profile: 'الملف الشخصي', customers: 'العملاء', fleet: 'الأسطول',
@@ -25,6 +27,8 @@ const STRINGS = {
     recordPayment: 'تسجيل دفعة', payOnline: 'الدفع عبر الإنترنت', amount: 'المبلغ', balance: 'الرصيد',
     addCustomer: 'إضافة عميل', name: 'الاسم', company: 'الشركة', status: 'الحالة',
     logTrip: 'تسجيل رحلة', submitCash: 'تسليم النقد', maintenance: 'الصيانة',
+    home: 'الرئيسية', more: 'المزيد', directVouchers: 'القسائم المباشرة', revenue: 'الإيرادات',
+    hotels: 'الفنادق', transport: 'النقل', catering: 'التموين', confirm: 'تأكيد',
   },
 };
 
