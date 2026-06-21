@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Safre Manasik",
+    "slug": "safre-manasik",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "safremanasik",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0D2B1A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.safremanasik.app"
+    },
+    "android": {
+      "package": "com.safremanasik.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0D2B1A"
+      },
+      "permissions": ["NOTIFICATIONS"]
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-notifications"
+    ],
+    "extra": {
+      "apiBaseUrl": "https://api.safremanasik.com/api"
+    }
+  }
+}
