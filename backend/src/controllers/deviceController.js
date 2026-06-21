@@ -1,4 +1,14 @@
 const prisma = require('../config/database');
+const push = require('../services/pushService');
+
+// GET /devices/push-status — admin diagnostic: is FCM configured + can it auth?
+const pushStatus = async (req, res, next) => {
+  try {
+    res.json(await push.verify());
+  } catch (err) {
+    next(err);
+  }
+};
 
 // POST /devices — register (or refresh) a push token for the current user.
 // Upsert on the unique token so re-registering the same device just updates the
@@ -36,4 +46,4 @@ const unregister = async (req, res, next) => {
   }
 };
 
-module.exports = { register, unregister };
+module.exports = { register, unregister, pushStatus };

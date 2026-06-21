@@ -131,4 +131,14 @@ async function notifyUser(userId, payload) {
   }
 }
 
-module.exports = { isEnabled, notifyUser, sendToTokens };
+// Diagnostic: confirms the service account is loaded AND can authenticate to
+// FCM (real OAuth token exchange). Never returns any secret material.
+async function verify() {
+  const sa = serviceAccount();
+  if (!sa) return { configured: false, authOk: false };
+  let authOk = false;
+  try { authOk = !!(await getAccessToken()); } catch { authOk = false; }
+  return { configured: true, authOk, projectId: sa.project_id };
+}
+
+module.exports = { isEnabled, notifyUser, sendToTokens, verify };
