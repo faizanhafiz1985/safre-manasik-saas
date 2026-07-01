@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import api from '../api/client';
 import { COLORS } from '../theme';
 
 const ROOM_TYPES = ['Sharing', 'Double', 'Triple', 'Quad', 'Quint'];
+const DEFAULT_VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
 const D12 = /^\d{12}$/;
 const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -19,6 +20,16 @@ export default function DirectVoucherFormScreen({ navigation }) {
     passengerCount: '',
   });
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+  const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLE_TYPES);
+  useEffect(() => {
+    // Configurable vehicle types from System Config → Fleet Settings (falls back to defaults).
+    api.get('/config').then((r) => {
+      const raw = (r.data?.vehicle_types || '').trim();
+      const list = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      setVehicleTypes(list.length ? Array.from(new Set(list)) : DEFAULT_VEHICLE_TYPES);
+    }).catch(() => {});
+  }, []);
 
   const submit = async () => {
     if (!f.firstName.trim() || !f.lastName.trim()) return Alert.alert('Required', 'First and last name are required.');
@@ -77,7 +88,8 @@ export default function DirectVoucherFormScreen({ navigation }) {
       ) : (
         <>
           <Sec>Transport</Sec>
-          <F label="Vehicle Type *" v={f.vehicleType} on={(v) => set('vehicleType', v)} />
+          <Text style={styles.label}>Vehicle Type *</Text>
+          <View style={styles.chips}>{vehicleTypes.map((vt) => <TouchableOpacity key={vt} style={[styles.chip, f.vehicleType === vt && styles.chipOn]} onPress={() => set('vehicleType', vt)}><Text style={[styles.chipTxt, f.vehicleType === vt && { color: '#fff' }]}>{vt}</Text></TouchableOpacity>)}</View>
           <Two><F label="Pickup *" v={f.pickupLocation} on={(v) => set('pickupLocation', v)} /><F label="Drop-off *" v={f.dropoffLocation} on={(v) => set('dropoffLocation', v)} /></Two>
           <Two><F label="Travel Date * (YYYY-MM-DD)" v={f.travelDate} on={(v) => set('travelDate', v)} /><F label="Pax" v={f.passengerCount} kb="number-pad" on={(v) => set('passengerCount', v.replace(/[^0-9]/g, ''))} /></Two>
           <F label="Price (SAR) *" v={f.price} kb="decimal-pad" on={(v) => set('price', v.replace(/[^0-9.]/g, ''))} />

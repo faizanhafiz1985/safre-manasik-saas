@@ -17,7 +17,7 @@ import { PATTERNS, numericOnly, alphaOnly } from '../utils/validation';
 const SAR = (n) => `SAR ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 const D12 = /^\d{12}$/;
 const ALPHANUM = /^[A-Za-z0-9]+$/;
-const VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
+const DEFAULT_VEHICLE_TYPES = ['Sedan', 'SUV (GMC)', 'Van (Hiace)', 'Coaster', 'Bus (50-seater)', 'VIP'];
 const ROOM_TYPES = ['Sharing', 'Double', 'Triple', 'Quad', 'Quint'];
 const STATUS_COLOR = { TENTATIVE: 'warning', CONFIRMED: 'success', CANCELLED: 'default' };
 
@@ -48,6 +48,7 @@ export default function VoucherFormsPage() {
   const [errs, setErrs] = useState({});
   const [voucherNo, setVoucherNo] = useState('—');
   const [hotels, setHotels] = useState([]);
+  const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLE_TYPES);
   const [saving, setSaving] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
 
@@ -65,6 +66,15 @@ export default function VoucherFormsPage() {
       .finally(() => setLoading(false));
   }, [page, search, statusFilter]);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    // Configurable vehicle types from System Config → Fleet Settings (falls back to defaults).
+    api.get('/config').then((r) => {
+      const raw = (r.data?.vehicle_types || '').trim();
+      const list = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      setVehicleTypes(list.length ? Array.from(new Set(list)) : DEFAULT_VEHICLE_TYPES);
+    }).catch(() => {});
+  }, []);
 
   const isHotel = form.type === 'HOTEL';
 
@@ -388,7 +398,10 @@ export default function VoucherFormsPage() {
                       <Grid item xs={12} sm={6}>
                         <TextField select fullWidth size="small" label="Vehicle Type *" error={!!te.vehicleType} helperText={te.vehicleType}
                           value={t.vehicleType} onChange={(e) => updateTrip(i, { vehicleType: e.target.value })}>
-                          {VEHICLE_TYPES.map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
+                          {(t.vehicleType && !vehicleTypes.includes(t.vehicleType)
+                            ? [t.vehicleType, ...vehicleTypes]
+                            : vehicleTypes
+                          ).map((v) => <MenuItem key={v} value={v}>{v}</MenuItem>)}
                         </TextField>
                       </Grid>
                       <Grid item xs={12} sm={6}><TextField fullWidth size="small" type="date" label="Travel Date *" InputLabelProps={{ shrink: true }}
