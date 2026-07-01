@@ -3,7 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --include=dev
+# `npm install` (not `npm ci`) so a dependency added to package.json resolves
+# even when package-lock.json hasn't been regenerated in the same commit.
+RUN npm install --include=dev
 
 COPY . .
 

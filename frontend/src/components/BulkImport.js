@@ -4,9 +4,45 @@ import {
   Alert, CircularProgress, List, ListItem, ListItemText, Chip, Divider,
 } from '@mui/material';
 import { UploadFile, Download } from '@mui/icons-material';
+import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import { buildCsv, parseCsv } from '../utils/csv';
+
+// Coerce one spreadsheet cell to the string form the CSV pipeline expects.
+// Dates (Excel stores them as serials → JS Date when cellDates:true) are
+// emitted as YYYY-MM-DD using LOCAL parts, matching what the user typed.
+function cellToString(v) {
+  if (v == null) return '';
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, '0');
+    const d = String(v.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(v).trim();
+}
+
+// Parse the first sheet of an .xlsx/.xls workbook into records keyed by the
+// header row — the exact shape parseCsv() returns, so the rest of the flow
+// (and the backend) is format-agnostic.
+function parseWorkbook(arrayBuffer) {
+  const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) return [];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false, defval: '' });
+  if (!aoa.length) return [];
+  const headers = (aoa[0] || []).map((h) => String(h == null ? '' : h).trim());
+  const records = [];
+  for (let r = 1; r < aoa.length; r++) {
+    const cells = aoa[r] || [];
+    if (cells.every((c) => c == null || String(c).trim() === '')) continue;
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = cellToString(cells[i]); });
+    records.push(obj);
+  }
+  return records;
+}
 
 // Reusable "Import" button + dialog. Download a template, fill it, upload it.
 //   <BulkImport entity="customers" label="Customers" onDone={fetchList} />
@@ -50,18 +86,23 @@ export default function BulkImport({ entity, label, onDone, size = 'small', vari
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     setFileName(file.name); setResult(null); setRows(null);
+    const name = (file.name || '').toLowerCase();
+    const isExcel = name.endsWith('.xlsx') || name.endsWith('.xls');
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const { records } = parseCsv(String(reader.result || ''));
+        const records = isExcel
+          ? parseWorkbook(reader.result)
+          : parseCsv(String(reader.result || '')).records;
         setRows(records);
         if (!records.length) toast.warn('No data rows found below the header');
       } catch {
-        toast.error('Could not read the file — please upload a .csv');
+        toast.error('Could not read the file — please upload a .csv or .xlsx');
         setRows(null);
       }
     };
-    reader.readAsText(file, 'utf-8');
+    if (isExcel) reader.readAsArrayBuffer(file);
+    else reader.readAsText(file, 'utf-8');
     e.target.value = ''; // allow re-picking the same file after edits
   };
 
@@ -86,7 +127,8 @@ export default function BulkImport({ entity, label, onDone, size = 'small', vari
         <DialogContent dividers>
           <Alert severity="info" sx={{ mb: 2 }}>
             <strong>Step 1</strong> — Download the template. <strong>Step 2</strong> — Fill one row per record,
-            keeping the header row unchanged. <strong>Step 3</strong> — Save and upload the CSV.
+            keeping the header row unchanged. <strong>Step 3</strong> — Save and upload it — <strong>CSV or Excel
+            (.xlsx)</strong> both work.
           </Alert>
 
           <Button startIcon={<Download />} onClick={downloadTemplate} variant="contained" sx={{ mb: 2 }}>
@@ -109,8 +151,10 @@ export default function BulkImport({ entity, label, onDone, size = 'small', vari
           <Divider sx={{ my: 2 }} />
 
           <Button variant="outlined" component="label" startIcon={<UploadFile />}>
-            Choose CSV file
-            <input hidden type="file" accept=".csv,text/csv" onChange={onPick} />
+            Choose CSV or Excel file
+            <input hidden type="file"
+              accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              onChange={onPick} />
           </Button>
           {fileName && (
             <Typography variant="body2" sx={{ mt: 1 }}>
