@@ -42,6 +42,13 @@ function coerceValue(col, raw) {
       if (col.len && d.length !== col.len) return { error: `${col.header} must be exactly ${col.len} digits` };
       return { value: d };
     }
+    case 'date': {
+      // Kept as a YYYY-MM-DD string; downstream layers do their own Date parsing.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return { error: `${col.header} must be a date in YYYY-MM-DD format` };
+      const d = new Date(`${v}T00:00:00Z`);
+      if (isNaN(d.getTime())) return { error: `${col.header} is not a valid date` };
+      return { value: v };
+    }
     case 'list': {
       return { value: v.split(/[;|]/).map((s) => s.trim()).filter(Boolean) };
     }
@@ -126,10 +133,14 @@ const bulkImport = async (req, res, next) => {
       if (rowErr) { errors.push({ row: rowNo, error: rowErr }); continue; }
 
       try {
-        await prisma[schema.model].create({ data });
+        // Entities with a custom create flow (e.g. direct vouchers need a voucher
+        // number, computed totals and an auto-invoice) provide `createRow`; the
+        // rest fall back to a plain single-model create.
+        if (schema.createRow) await schema.createRow(data, { prisma, req });
+        else await prisma[schema.model].create({ data });
         created++;
       } catch (e) {
-        errors.push({ row: rowNo, error: dbErrorMessage(e) });
+        errors.push({ row: rowNo, error: e && e.status === 400 && e.message ? e.message : dbErrorMessage(e) });
       }
     }
 

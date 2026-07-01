@@ -10,6 +10,7 @@ import {
   RestartAlt, Edit, Block, Description, RequestQuote, Paid,
 } from '@mui/icons-material';
 import api from '../services/api';
+import BulkImport from '../components/BulkImport';
 import { toast } from 'react-toastify';
 import { fmtDate } from '../utils/helpers';
 import { PATTERNS, numericOnly, alphaOnly } from '../utils/validation';
@@ -228,7 +229,11 @@ export default function VoucherFormsPage() {
           <Typography variant="h5">Direct Vouchers</Typography>
           <Typography variant="body2" color="text.secondary">Standalone hotel & transport vouchers</Typography>
         </Box>
-        <Button variant="contained" startIcon={<Add />} onClick={openNew}>New Voucher</Button>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <BulkImport entity="hotel_vouchers" label="Direct Vouchers — Hotel" onDone={load} />
+          <BulkImport entity="transport_vouchers" label="Direct Vouchers — Transport" onDone={load} />
+          <Button variant="contained" startIcon={<Add />} onClick={openNew}>New Voucher</Button>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>

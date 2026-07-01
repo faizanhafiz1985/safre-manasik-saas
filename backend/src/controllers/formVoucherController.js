@@ -286,34 +286,48 @@ const getOne = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Core voucher-creation used by both the HTTP handler and the bulk importer, so
+// imported vouchers get the same voucher number, totals and auto-Proforma invoice
+// as manually-created ones. Throws a { status:400, fields } error on validation
+// failure; the caller maps it to a response.
+async function createVoucherRecord(body, user) {
+  const tenantId = user.tenantId;
+  const { type, errors } = validateVoucher(body);
+  if (errors.length) {
+    const e = new Error(errors.join('; '));
+    e.status = 400; e.fields = errors;
+    throw e;
+  }
+
+  const voucherNo = await generateVoucherNo();
+  const totalValue = computeTotal(type, body);
+  const { vatRate } = await getTenantFinancials(tenantId); // snapshot at issue
+
+  const data = {
+    tenantId, voucherNo, type, status: 'TENTATIVE',
+    companyName: body.companyName?.trim() || null,
+    firstName: String(body.firstName).trim(),
+    lastName: String(body.lastName).trim(),
+    mobile: (body.mobile || '').replace(/\s/g, ''),
+    whatsapp: body.whatsapp ? String(body.whatsapp).replace(/\s/g, '') : null,
+    passport: String(body.passport).trim(),
+    totalValue, vatRate, createdById: user.id,
+    ...typeColumns(type, body),
+  };
+  const voucher = await prisma.formVoucher.create({ data });
+  // Auto-generate the Proforma invoice for the tentative voucher (best-effort).
+  let proformaInvoiceId = null;
+  try { proformaInvoiceId = await upsertInvoice(voucher, 'PROFORMA', user.id); }
+  catch (e) { console.error('[voucher] proforma generation failed:', e.message); }
+  return { voucher, proformaInvoiceId };
+}
+
 const create = async (req, res, next) => {
   try {
-    const tenantId = req.user.tenantId;
-    const { type, errors } = validateVoucher(req.body);
-    if (errors.length) return res.status(400).json({ error: errors.join('; '), fields: errors });
-
-    const voucherNo = await generateVoucherNo();
-    const totalValue = computeTotal(type, req.body);
-    const { vatRate } = await getTenantFinancials(tenantId); // snapshot at issue
-
-    const data = {
-      tenantId, voucherNo, type, status: 'TENTATIVE',
-      companyName: req.body.companyName?.trim() || null,
-      firstName: String(req.body.firstName).trim(),
-      lastName: String(req.body.lastName).trim(),
-      mobile: (req.body.mobile || '').replace(/\s/g, ''),
-      whatsapp: req.body.whatsapp ? String(req.body.whatsapp).replace(/\s/g, '') : null,
-      passport: String(req.body.passport).trim(),
-      totalValue, vatRate, createdById: req.user.id,
-      ...typeColumns(type, req.body),
-    };
-    const voucher = await prisma.formVoucher.create({ data });
-    // Auto-generate the Proforma invoice for the tentative voucher (best-effort).
-    let proformaInvoiceId = null;
-    try { proformaInvoiceId = await upsertInvoice(voucher, 'PROFORMA', req.user.id); }
-    catch (e) { console.error('[voucher] proforma generation failed:', e.message); }
+    const { voucher, proformaInvoiceId } = await createVoucherRecord(req.body, req.user);
     res.status(201).json({ ...voucher, proformaInvoiceId });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message, fields: err.fields });
     if (err.code === 'P2002') return res.status(409).json({ error: 'Duplicate voucher number — please retry' });
     next(err);
   }
@@ -730,4 +744,5 @@ const invoicePrintHtml = async (req, res, next) => {
 module.exports = {
   nextNumber, list, getOne, create, update, confirm, cancel, remove, printHtml,
   recordPayment, listInvoices, invoicePrintHtml, cancelInvoice, deleteInvoice,
+  createVoucherRecord,
 };

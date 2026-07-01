@@ -20,7 +20,71 @@
 // string to reject, or null to accept.
 // ─────────────────────────────────────────────────────────────────────────
 
+// Lazily required inside createRow to avoid any load-order coupling with the
+// controller layer (the controller has no dependency back on this registry).
+const buildVoucherRow = (type) => async (data, { req }) => {
+  const { createVoucherRecord } = require('../controllers/formVoucherController');
+  const common = {
+    firstName: data.firstName, lastName: data.lastName, companyName: data.companyName,
+    mobile: data.mobile, whatsapp: data.whatsapp, passport: data.passport,
+  };
+  const trip = type === 'HOTEL'
+    ? {
+        hotelName: data.hotelName, checkInDate: data.checkInDate, checkOutDate: data.checkOutDate,
+        rooms: data.rooms, roomType: data.roomType, passengerCount: data.passengerCount,
+        perNightPrice: data.perNightPrice,
+      }
+    : {
+        vehicleType: data.vehicleType, pickupLocation: data.pickupLocation, dropoffLocation: data.dropoffLocation,
+        travelDate: data.travelDate, passengerCount: data.passengerCount, price: data.price,
+      };
+  // createVoucherRecord re-runs the full voucher validation (same rules/messages
+  // as the single-create path) and throws { status:400 } on any bad row.
+  await createVoucherRecord({ type, ...common, trips: [trip] }, req.user);
+};
+
 const IMPORT_SCHEMAS = {
+  hotel_vouchers: {
+    label: 'Direct Vouchers — Hotel',
+    roles: ['ADMIN', 'AGENT'],
+    createRow: buildVoucherRow('HOTEL'),
+    columns: [
+      { key: 'firstName', header: 'First Name', type: 'string', required: true, example: 'Abdullah' },
+      { key: 'lastName', header: 'Last Name', type: 'string', required: true, example: 'Khan' },
+      { key: 'companyName', header: 'Company (optional)', type: 'string', example: '' },
+      { key: 'mobile', header: 'Mobile (12 digits, 966XXXXXXXXX)', type: 'digits', len: 12, required: true, example: '966501234567' },
+      { key: 'whatsapp', header: 'WhatsApp (12 digits, optional)', type: 'digits', len: 12, example: '' },
+      { key: 'passport', header: 'Passport #', type: 'string', required: true, example: 'A1234567' },
+      { key: 'hotelName', header: 'Hotel Name', type: 'string', required: true, example: 'Hilton Makkah Convention' },
+      { key: 'checkInDate', header: 'Check-in (YYYY-MM-DD)', type: 'date', required: true, example: '2026-08-01' },
+      { key: 'checkOutDate', header: 'Check-out (YYYY-MM-DD)', type: 'date', required: true, example: '2026-08-05' },
+      { key: 'rooms', header: 'Rooms', type: 'int', min: 1, default: 1, example: '1' },
+      { key: 'roomType', header: 'Room Type (Sharing/Double/Triple/Quad/Quint)', type: 'enum', enumValues: ['Sharing', 'Double', 'Triple', 'Quad', 'Quint'], example: 'Double' },
+      { key: 'passengerCount', header: 'Passengers (optional)', type: 'int', min: 1, example: '2' },
+      { key: 'perNightPrice', header: 'Per-night Price', type: 'decimal', required: true, example: '450' },
+    ],
+  },
+
+  transport_vouchers: {
+    label: 'Direct Vouchers — Transport',
+    roles: ['ADMIN', 'AGENT'],
+    createRow: buildVoucherRow('TRANSPORT'),
+    columns: [
+      { key: 'firstName', header: 'First Name', type: 'string', required: true, example: 'Abdullah' },
+      { key: 'lastName', header: 'Last Name', type: 'string', required: true, example: 'Khan' },
+      { key: 'companyName', header: 'Company (optional)', type: 'string', example: '' },
+      { key: 'mobile', header: 'Mobile (12 digits, 966XXXXXXXXX)', type: 'digits', len: 12, required: true, example: '966501234567' },
+      { key: 'whatsapp', header: 'WhatsApp (12 digits, optional)', type: 'digits', len: 12, example: '' },
+      { key: 'passport', header: 'Passport #', type: 'string', required: true, example: 'A1234567' },
+      { key: 'vehicleType', header: 'Vehicle Type', type: 'string', required: true, example: 'SUV (GMC)' },
+      { key: 'pickupLocation', header: 'Pickup Location', type: 'string', required: true, example: 'Jeddah Airport (JED)' },
+      { key: 'dropoffLocation', header: 'Drop-off Location', type: 'string', required: true, example: 'Makkah Hotel' },
+      { key: 'travelDate', header: 'Travel Date (YYYY-MM-DD)', type: 'date', required: true, example: '2026-08-01' },
+      { key: 'passengerCount', header: 'Passengers (optional)', type: 'int', min: 1, example: '3' },
+      { key: 'price', header: 'Price', type: 'decimal', required: true, example: '600' },
+    ],
+  },
+
   hotels: {
     model: 'hotel',
     label: 'Hotels',
