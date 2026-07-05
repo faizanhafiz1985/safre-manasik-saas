@@ -2,9 +2,10 @@
 builder = "nixpacks"
 
 [deploy]
-# Must apply the Prisma schema before boot — without this, deploys that add
-# columns leave the DB behind the code (form_vouchers.customerId outage,
-# 2026-07-05). Keep in sync with railway.json / Dockerfile CMD.
-startCommand = "npx prisma db push --accept-data-loss && node src/server.js"
+# Schema changes are applied by src/bootstrap.js (raw ALTER ... IF NOT EXISTS
+# on boot) — NOT by prisma db push. Do not add prisma CLI here: it is a
+# devDependency and is not present in the production image (caused the
+# 2026-07-05 crash-loop). Every new column MUST get a bootstrap ensure* guard.
+startCommand = "node src/server.js"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10

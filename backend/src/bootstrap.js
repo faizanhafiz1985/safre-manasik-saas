@@ -198,7 +198,10 @@ async function ensureVoucherFormTables() {
     await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMPTZ`);
     await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "paymentMethod" VARCHAR(32)`);
     await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "paymentRef" TEXT`);
-    logger.info('[bootstrap] hotels.pricePerNight + form_vouchers (+trips,+payment) table ready');
+    // Unified customer registry link (CUSTOMER-role User id; no FK by design).
+    await prisma.$executeRawUnsafe(`ALTER TABLE form_vouchers ADD COLUMN IF NOT EXISTS "customerId" VARCHAR(36)`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fv_tenant_customer ON form_vouchers("tenantId", "customerId")`);
+    logger.info('[bootstrap] hotels.pricePerNight + form_vouchers (+trips,+payment,+customerId) table ready');
   } catch (err) {
     logger.error(`[bootstrap] ensureVoucherFormTables failed: ${err.message}`);
   }
