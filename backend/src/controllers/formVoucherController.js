@@ -286,6 +286,51 @@ const getOne = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── Unified customer registry sync ────────────────────────────────────────────
+// Every direct voucher is linked to a CUSTOMER-role User so voucher customers
+// appear in the Customers tab alongside booking customers. Resolution order:
+// explicit pick from the form → match by mobile → auto-create. Auto-created
+// records get a placeholder login email (no welcome email is sent) — the email
+// can't be blank because it is the unique login identity on User.
+// Best-effort by design: a failure here must never block voucher save.
+async function resolveVoucherCustomer(body) {
+  const mobile = String(body.mobile || '').replace(/\s/g, '');
+  if (!mobile) return null;
+
+  // Explicit pick from the form's customer selector (validated in-tenant —
+  // the tenant middleware scopes the lookup).
+  if (body.customerId) {
+    const picked = await prisma.user.findFirst({ where: { id: body.customerId, role: 'CUSTOMER' }, select: { id: true } });
+    if (picked) return picked.id;
+  }
+
+  // Same mobile number = same customer (in-tenant via middleware scoping).
+  const existing = await prisma.user.findFirst({ where: { role: 'CUSTOMER', phone: mobile }, select: { id: true } });
+  if (existing) return existing.id;
+
+  const bcrypt = require('bcryptjs');
+  const crypto = require('crypto');
+  const name = `${String(body.firstName || '').trim()} ${String(body.lastName || '').trim()}`.trim();
+  const password = await bcrypt.hash(crypto.randomBytes(12).toString('base64url'), 12);
+  const baseEmail = `c${mobile}@customers.safremanasik.com`;
+  try {
+    const created = await prisma.user.create({
+      data: { name, email: baseEmail, password, role: 'CUSTOMER', phone: mobile, companyName: body.companyName?.trim() || null },
+      select: { id: true },
+    });
+    return created.id;
+  } catch (e) {
+    if (e.code !== 'P2002') throw e;
+    // Email exists globally (e.g. same mobile in another tenant) — retry with a
+    // random suffix so this tenant still gets its own customer record.
+    const created = await prisma.user.create({
+      data: { name, email: `c${mobile}.${crypto.randomBytes(3).toString('hex')}@customers.safremanasik.com`, password, role: 'CUSTOMER', phone: mobile, companyName: body.companyName?.trim() || null },
+      select: { id: true },
+    });
+    return created.id;
+  }
+}
+
 // Core voucher-creation used by both the HTTP handler and the bulk importer, so
 // imported vouchers get the same voucher number, totals and auto-Proforma invoice
 // as manually-created ones. Throws a { status:400, fields } error on validation
@@ -303,8 +348,13 @@ async function createVoucherRecord(body, user) {
   const totalValue = computeTotal(type, body);
   const { vatRate } = await getTenantFinancials(tenantId); // snapshot at issue
 
+  // Sync with the unified customer registry (best-effort — never blocks save).
+  let customerId = null;
+  try { customerId = await resolveVoucherCustomer(body); }
+  catch (e) { console.error('[voucher] customer sync failed:', e.message); }
+
   const data = {
-    tenantId, voucherNo, type, status: 'TENTATIVE',
+    tenantId, voucherNo, type, status: 'TENTATIVE', customerId,
     companyName: body.companyName?.trim() || null,
     firstName: String(body.firstName).trim(),
     lastName: String(body.lastName).trim(),
@@ -347,10 +397,15 @@ const update = async (req, res, next) => {
     const totalValue = computeTotal(type, req.body);
     const { vatRate } = await getTenantFinancials(v.tenantId);
 
+    // Re-resolve the linked customer in case the mobile/name changed.
+    let customerId = v.customerId;
+    try { customerId = await resolveVoucherCustomer(req.body); }
+    catch (e) { console.error('[voucher] customer sync failed:', e.message); }
+
     await prisma.formVoucher.updateMany({
       where: { id: req.params.id },
       data: {
-        type,
+        type, customerId,
         companyName: req.body.companyName?.trim() || null,
         firstName: String(req.body.firstName).trim(),
         lastName: String(req.body.lastName).trim(),
@@ -745,4 +800,6 @@ module.exports = {
   nextNumber, list, getOne, create, update, confirm, cancel, remove, printHtml,
   recordPayment, listInvoices, invoicePrintHtml, cancelInvoice, deleteInvoice,
   createVoucherRecord,
+  // Shared branded-print building blocks (reused by the customer statement).
+  printHelpers: { esc, fmtDateLong, moneyFmt, loadTenantBrand, brandHeaderInner, baseCss, getTenantFinancials },
 };

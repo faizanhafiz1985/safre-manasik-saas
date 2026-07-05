@@ -294,6 +294,12 @@ model FormVoucher {
   whatsapp    String?
   passport    String
 
+  // Link to the unified customer registry (CUSTOMER-role User). Resolved on
+  // create/update: an explicit pick from the form, else matched by mobile, else
+  // a new customer record is auto-created. Plain id (no FK) — consistent with
+  // the audit-trail user ids below.
+  customerId  String?
+
   // Hotel-specific. A hotel voucher may hold MULTIPLE trips (segments). `trips`
   // is a JSON array of { hotelName, hotelId, checkInDate, checkOutDate,
   // perNightPrice, nights, lineTotal }. The single-hotel columns below are kept
@@ -337,6 +343,7 @@ model FormVoucher {
   @@unique([tenantId, voucherNo])
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, customerId])
   @@map("form_vouchers")
 }
 

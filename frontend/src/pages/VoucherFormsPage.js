@@ -4,6 +4,7 @@ import {
   CircularProgress, Chip, TextField, InputAdornment, MenuItem, Dialog, DialogTitle,
   DialogContent, DialogActions, Grid, TablePagination, IconButton, Tooltip,
   ToggleButton, ToggleButtonGroup, Alert, Divider, InputLabel, FormControl, Select,
+  Autocomplete,
 } from '@mui/material';
 import {
   Add, Search, Receipt, Delete, CheckCircle, Hotel as HotelIcon, DirectionsBus,
@@ -25,7 +26,7 @@ const STATUS_COLOR = { TENTATIVE: 'warning', CONFIRMED: 'success', CANCELLED: 'd
 const EMPTY_HOTEL_TRIP = { hotelId: '', hotelName: '', checkInDate: '', checkOutDate: '', rooms: '1', roomType: '', passengerCount: '', perNightPrice: '' };
 const EMPTY_TRANSPORT_TRIP = { vehicleType: '', pickupLocation: '', dropoffLocation: '', travelDate: '', passengerCount: '', price: '' };
 const emptyTrip = (type) => (type === 'HOTEL' ? { ...EMPTY_HOTEL_TRIP } : { ...EMPTY_TRANSPORT_TRIP });
-const EMPTY = { type: 'HOTEL', companyName: '', firstName: '', lastName: '', mobile: '', whatsapp: '', passport: '', trips: [{ ...EMPTY_HOTEL_TRIP }] };
+const EMPTY = { type: 'HOTEL', customerId: '', companyName: '', firstName: '', lastName: '', mobile: '', whatsapp: '', passport: '', trips: [{ ...EMPTY_HOTEL_TRIP }] };
 
 function nights(ci, co) {
   if (!ci || !co) return 0;
@@ -49,6 +50,7 @@ export default function VoucherFormsPage() {
   const [errs, setErrs] = useState({});
   const [voucherNo, setVoucherNo] = useState('—');
   const [hotels, setHotels] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLE_TYPES);
   const [saving, setSaving] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
@@ -80,6 +82,21 @@ export default function VoucherFormsPage() {
   const isHotel = form.type === 'HOTEL';
 
   const fetchHotels = () => api.get('/hotels').then((h) => setHotels(Array.isArray(h.data) ? h.data : (h.data.data || []))).catch(() => setHotels([]));
+  const fetchCustomers = () => api.get('/users/customers').then((r) => setCustomers(r.data.data || [])).catch(() => setCustomers([]));
+
+  // Prefill the party fields from an existing customer (picker in the dialog).
+  const applyCustomer = (c) => {
+    if (!c) return setForm((f) => ({ ...f, customerId: '' }));
+    const parts = String(c.name || '').trim().split(/\s+/);
+    setForm((f) => ({
+      ...f,
+      customerId: c.id,
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ') || '',
+      mobile: String(c.phone || '').replace(/\D/g, ''),
+      companyName: c.companyName || '',
+    }));
+  };
 
   const openNew = async () => {
     setEditingId(null); setForm(EMPTY); setErrs({}); setVoucherNo('…'); setOpen(true);
@@ -88,11 +105,13 @@ export default function VoucherFormsPage() {
       setVoucherNo(n.data.voucherNo);
     } catch { setVoucherNo('(auto)'); }
     fetchHotels();
+    fetchCustomers();
   };
 
   const openEdit = async (v) => {
     setErrs({}); setOpen(true); setVoucherNo(v.voucherNo); setEditingId(v.id);
     fetchHotels();
+    fetchCustomers();
     try {
       const r = await api.get(`/voucher-forms/${v.id}`);
       const d = r.data;
@@ -102,7 +121,7 @@ export default function VoucherFormsPage() {
           : { vehicleType: t.vehicleType || '', pickupLocation: t.pickupLocation || '', dropoffLocation: t.dropoffLocation || '', travelDate: dateOnly(t.travelDate), passengerCount: t.passengerCount != null ? String(t.passengerCount) : '', price: t.price != null ? String(t.price) : '' })
         : [emptyTrip(d.type)];
       setForm({
-        type: d.type, companyName: d.companyName || '', firstName: d.firstName || '', lastName: d.lastName || '',
+        type: d.type, customerId: d.customerId || '', companyName: d.companyName || '', firstName: d.firstName || '', lastName: d.lastName || '',
         mobile: d.mobile || '', whatsapp: d.whatsapp || '', passport: d.passport || '', trips,
       });
     } catch { toast.error('Failed to load voucher'); setOpen(false); }
@@ -328,6 +347,20 @@ export default function VoucherFormsPage() {
 
           <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: '#1B4B35' }}>Customer</Typography>
           <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Autocomplete
+                size="small"
+                options={customers}
+                value={customers.find((c) => c.id === form.customerId) || null}
+                onChange={(_, c) => applyCustomer(c)}
+                getOptionLabel={(c) => `${c.name}${c.phone ? ` — ${c.phone}` : ''}${c.companyName ? ` (${c.companyName})` : ''}`}
+                isOptionEqualToValue={(o, v) => o.id === v.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Existing customer (optional)"
+                    helperText="Pick to prefill — or type the details below; new customers are saved to the Customers tab automatically" />
+                )}
+              />
+            </Grid>
             <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Company Name (optional)" error={!!errs.companyName} helperText={errs.companyName}
               inputProps={{ onKeyDown: alphaOnly }} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></Grid>
             <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Passport # *" error={!!errs.passport} helperText={errs.passport}
@@ -337,7 +370,8 @@ export default function VoucherFormsPage() {
             <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Last Name *" error={!!errs.lastName} helperText={errs.lastName}
               inputProps={{ onKeyDown: alphaOnly }} value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Grid>
             <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Mobile # *" error={!!errs.mobile} helperText={errs.mobile || 'e.g. 966501234567 (12 digits)'}
-              inputProps={{ onKeyDown: numericOnly, maxLength: 12 }} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></Grid>
+              inputProps={{ onKeyDown: numericOnly, maxLength: 12 }} value={form.mobile}
+              onChange={(e) => setForm({ ...form, mobile: e.target.value, customerId: '' })} /></Grid>
             <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="WhatsApp # (optional)" error={!!errs.whatsapp} helperText={errs.whatsapp || '12 digits if provided'}
               inputProps={{ onKeyDown: numericOnly, maxLength: 12 }} value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} /></Grid>
           </Grid>

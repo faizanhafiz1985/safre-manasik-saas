@@ -191,6 +191,7 @@ as the web app does (show a tab only if `permissions` contains `"<feature>:view"
 | GET | `/voucher-forms/:id/print` | B `voucher_forms:view` | **HTML** voucher printout |
 | GET | `/voucher-forms/:id/invoices` | B `voucher_forms:view` | list invoices for the voucher |
 | GET | `/voucher-forms/:id/invoice/:docType/print` | B `voucher_forms:view` | **HTML** invoice (`docType`=`PROFORMA`\|`ACTUAL`) with ZATCA QR |
+| — | *(behaviour)* | — | Every direct voucher is linked to the unified customer registry: pass `customerId` to link an existing customer, else the server matches by `mobile`, else auto-creates a CUSTOMER user (placeholder login email, no welcome email). Voucher customers therefore appear in `/users/customers`. |
 | PATCH | `/voucher-forms/invoices/:invoiceId/cancel` | B ADMIN/AGENT `voucher_forms:edit` | cancel an invoice |
 | DELETE | `/voucher-forms/invoices/:invoiceId` | B ADMIN `voucher_forms:delete` | delete invoice |
 | DELETE | `/voucher-forms/:id` | B ADMIN `voucher_forms:delete` | delete voucher |
@@ -199,6 +200,8 @@ as the web app does (show a tab only if `permissions` contains `"<feature>:view"
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/users/customers` | B ADMIN/AGENT | customer list/picker. `?search=`, `?includeInactive=1` (incl. disabled). Returns `{ data:[{id,name,email,phone,companyName,isActive,createdAt}] }`. **Active‑only when no flag** (used by booking pickers). |
+| GET | `/users/customers/:id/statement` | B ADMIN/AGENT | **Customer statement (JSON)** — date‑ranged debit/credit ledger merging bookings, booking payments, direct‑voucher invoices (gross incl. VAT) and voucher payments. `?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD` (both optional). Returns `{ customer, period, currency, openingBalance, lines[{date,kind,ref,description,debit,credit,balance}], totals{debits,credits,closingBalance} }`. Positive balance = amount due. |
+| GET | `/users/customers/:id/statement/print` | B ADMIN/AGENT | **HTML** branded statement printout (same params) — render in WebView/new tab |
 | POST | `/users` | B ADMIN/AGENT | create customer (`{ name,email,phone,companyName, role:'CUSTOMER' }`) — sends welcome email |
 | PUT | `/users/:id` | B ADMIN/AGENT | edit customer (`name,phone,companyName,address`; **email not editable**) |
 | DELETE | `/users/:id` | B ADMIN `users:delete` | delete |

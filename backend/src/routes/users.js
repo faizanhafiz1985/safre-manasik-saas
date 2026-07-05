@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const ctrl = require('../controllers/userController');
+const stmtCtrl = require('../controllers/customerStatementController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { tenantScope, requireTenant } = require('../middleware/tenant');
 const { checkQuota } = require('../middleware/quota');
@@ -11,6 +12,9 @@ router.use(authenticate, tenantScope, requireTenant);
 // they keep their existing role gate without a users-permission requirement.
 router.get('/agents', ctrl.getAgents);
 router.get('/customers', authorize('ADMIN', 'AGENT'), ctrl.getCustomers);
+// Customer account statement (bookings + vouchers + payments ledger, date-ranged).
+router.get('/customers/:id/statement', authorize('ADMIN', 'AGENT'), stmtCtrl.getStatement);
+router.get('/customers/:id/statement/print', authorize('ADMIN', 'AGENT'), stmtCtrl.printStatement);
 // The Users-management surface (list/detail/delete) is gated by the 'users' permission.
 router.get('/', authorize('ADMIN'), requirePermission('users', 'view'), ctrl.getAll);
 router.get('/:id', authorize('ADMIN'), requirePermission('users', 'view'), ctrl.getOne);

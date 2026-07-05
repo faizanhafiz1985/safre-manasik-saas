@@ -4,7 +4,7 @@ import {
   CircularProgress, Chip, TextField, InputAdornment, Dialog, DialogTitle,
   DialogContent, DialogActions, Grid, TablePagination, IconButton, Tooltip, Alert,
 } from '@mui/material';
-import { Add, Search, Edit, Delete } from '@mui/icons-material';
+import { Add, Search, Edit, Delete, ReceiptLong } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -25,6 +25,11 @@ export default function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Customer Statement dialog — date-ranged debit/credit ledger, opens as print HTML.
+  const [stmtFor, setStmtFor] = useState(null);
+  const [stmtRange, setStmtRange] = useState({ from: '', to: '' });
+  const [stmtLoading, setStmtLoading] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
@@ -61,6 +66,35 @@ export default function CustomersPage() {
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save customer');
     } finally { setSaving(false); }
+  };
+
+  const openStatement = (c) => {
+    // Default range: first day of the current month → today.
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const first = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    setStmtRange({ from: first, to: today });
+    setStmtFor(c);
+  };
+
+  const viewStatement = async () => {
+    if (stmtRange.from && stmtRange.to && stmtRange.from > stmtRange.to) {
+      return toast.error('From date must be on or before To date');
+    }
+    setStmtLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (stmtRange.from) params.set('dateFrom', stmtRange.from);
+      if (stmtRange.to) params.set('dateTo', stmtRange.to);
+      const r = await api.get(`/users/customers/${stmtFor.id}/statement/print?${params}`, { responseType: 'text' });
+      const w = window.open('', '_blank');
+      if (!w) return toast.error('Pop-up blocked — allow pop-ups to view the statement');
+      w.document.write(r.data); w.document.close();
+      setStmtFor(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load statement');
+    } finally { setStmtLoading(false); }
   };
 
   const handleDelete = async (c) => {
@@ -119,6 +153,7 @@ export default function CustomersPage() {
                     <TableCell><Typography variant="caption">{fmtDate(c.createdAt)}</Typography></TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                        <Tooltip title="Customer Statement"><IconButton size="small" color="primary" onClick={() => openStatement(c)}><ReceiptLong fontSize="small" /></IconButton></Tooltip>
                         <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(c)}><Edit fontSize="small" /></IconButton></Tooltip>
                         {isAdmin && <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDelete(c)}><Delete fontSize="small" /></IconButton></Tooltip>}
                       </Box>
@@ -136,6 +171,35 @@ export default function CustomersPage() {
           </>
         )}
       </Card>
+
+      {/* Customer Statement Dialog */}
+      <Dialog open={!!stmtFor} onClose={() => !stmtLoading && setStmtFor(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, color: '#1B4B35' }}>Customer Statement</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Statement of account for <strong>{stmtFor?.name}</strong> — bookings, vouchers, invoices and payments
+            with opening/closing balance for the selected period.
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <TextField fullWidth size="small" type="date" label="From" InputLabelProps={{ shrink: true }}
+                value={stmtRange.from} onChange={(e) => setStmtRange((r) => ({ ...r, from: e.target.value }))}
+                helperText="Blank = from the beginning" />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField fullWidth size="small" type="date" label="To" InputLabelProps={{ shrink: true }}
+                value={stmtRange.to} onChange={(e) => setStmtRange((r) => ({ ...r, to: e.target.value }))}
+                helperText="Blank = up to today" />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStmtFor(null)} disabled={stmtLoading}>Cancel</Button>
+          <Button variant="contained" startIcon={<ReceiptLong />} onClick={viewStatement} disabled={stmtLoading}>
+            {stmtLoading ? <CircularProgress size={18} color="inherit" /> : 'View Statement'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Create / Edit Dialog */}
       <Dialog open={open} onClose={() => !saving && setOpen(false)} maxWidth="sm" fullWidth>
