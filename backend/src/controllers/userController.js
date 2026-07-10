@@ -216,8 +216,10 @@ const getCustomers = async (req, res, next) => {
       const digits = (s) => String(s || '').replace(/\D/g, '');
       const q = search ? String(search).toLowerCase() : '';
       const known = new Set(customers.map((c) => digits(c.phone)).filter(Boolean));
+      // mobile is a required (non-null) column, so no `not: null` filter is needed
+      // (and Prisma rejects `not: null` on a non-nullable field). Blank mobiles are
+      // skipped in the loop below.
       const vouchers = await prisma.formVoucher.findMany({
-        where: { mobile: { not: null } },
         select: { firstName: true, lastName: true, companyName: true, mobile: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       });
