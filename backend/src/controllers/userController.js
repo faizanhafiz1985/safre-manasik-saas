@@ -186,7 +186,7 @@ const getCustomers = async (req, res, next) => {
     // Booking customer-pickers call this without flags → active customers only,
     // full list (no pagination). The Customers tab passes includeInactive=1 to
     // also show disabled customers and uses the richer fields below.
-    const { search, includeInactive } = req.query;
+    const { search, includeInactive, withVouchers } = req.query;
     const customers = await prisma.user.findMany({
       where: {
         role: 'CUSTOMER',
@@ -203,7 +203,40 @@ const getCustomers = async (req, res, next) => {
       select: { id: true, name: true, email: true, phone: true, companyName: true, isActive: true, createdAt: true },
       orderBy: { name: 'asc' },
     });
-    res.json({ data: customers, total: customers.length });
+
+    // Direct-Voucher customers are normally synced into the User registry at
+    // voucher-save time (resolveVoucherCustomer) and backfilled on boot. As a
+    // guaranteed display fallback — independent of that sync ever running — the
+    // Customers tab (?withVouchers=1) also surfaces voucher customers read
+    // straight from FormVoucher, deduped by mobile against the real users above.
+    // Pickers/booking flows omit the flag, so they still see only real users
+    // (no synthetic ids leak into booking/customerId writes).
+    const extra = [];
+    if (withVouchers === '1' || withVouchers === 'true') {
+      const digits = (s) => String(s || '').replace(/\D/g, '');
+      const q = search ? String(search).toLowerCase() : '';
+      const known = new Set(customers.map((c) => digits(c.phone)).filter(Boolean));
+      const vouchers = await prisma.formVoucher.findMany({
+        where: { mobile: { not: null } },
+        select: { firstName: true, lastName: true, companyName: true, mobile: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      const seen = new Set();
+      for (const v of vouchers) {
+        const d = digits(v.mobile);
+        if (!d || known.has(d) || seen.has(d)) continue;
+        seen.add(d);
+        const name = `${(v.firstName || '').trim()} ${(v.lastName || '').trim()}`.trim() || 'Customer';
+        if (q && !(name.toLowerCase().includes(q) || d.includes(digits(search)) || (v.companyName || '').toLowerCase().includes(q))) continue;
+        extra.push({
+          id: `dv:${d}`, name, email: null, phone: v.mobile, companyName: v.companyName || null,
+          isActive: true, createdAt: v.createdAt, source: 'voucher',
+        });
+      }
+    }
+
+    const data = [...customers, ...extra];
+    res.json({ data, total: data.length });
   } catch (err) {
     next(err);
   }

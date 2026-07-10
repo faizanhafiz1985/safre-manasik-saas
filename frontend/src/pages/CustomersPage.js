@@ -35,7 +35,7 @@ export default function CustomersPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get('/users/customers', { params: { includeInactive: 1, ...(search && { search }) } })
+    api.get('/users/customers', { params: { includeInactive: 1, withVouchers: 1, ...(search && { search }) } })
       .then((r) => { setCustomers(r.data.data || []); setPage(0); })
       .catch((err) => toast.error(err.response?.data?.error || 'Failed to load customers'))
       .finally(() => setLoading(false));
@@ -140,26 +140,41 @@ export default function CustomersPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {paged.map((c) => (
+                {paged.map((c) => {
+                  // Voucher-sourced rows have no real login account yet, so the
+                  // account actions (statement/edit/delete on /users/:id) don't apply.
+                  const fromVoucher = c.source === 'voucher';
+                  return (
                   <TableRow key={c.id} hover>
                     <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
-                    <TableCell>{c.email}</TableCell>
+                    <TableCell>{c.email || (fromVoucher ? '—' : '')}</TableCell>
                     <TableCell>{c.phone || '—'}</TableCell>
                     <TableCell>{c.companyName || '—'}</TableCell>
                     <TableCell>
-                      <Chip label={c.isActive === false ? 'Disabled' : 'Active'} size="small"
-                        color={c.isActive === false ? 'default' : 'success'} />
+                      {fromVoucher
+                        ? <Chip label="From Voucher" size="small" color="warning" variant="outlined" />
+                        : <Chip label={c.isActive === false ? 'Disabled' : 'Active'} size="small"
+                            color={c.isActive === false ? 'default' : 'success'} />}
                     </TableCell>
                     <TableCell><Typography variant="caption">{fmtDate(c.createdAt)}</Typography></TableCell>
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                        <Tooltip title="Customer Statement"><IconButton size="small" color="primary" onClick={() => openStatement(c)}><ReceiptLong fontSize="small" /></IconButton></Tooltip>
-                        <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(c)}><Edit fontSize="small" /></IconButton></Tooltip>
-                        {isAdmin && <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDelete(c)}><Delete fontSize="small" /></IconButton></Tooltip>}
+                        {fromVoucher ? (
+                          <Tooltip title="Added via a Direct Voucher. Becomes a full account when they book or you add them.">
+                            <span><IconButton size="small" disabled><ReceiptLong fontSize="small" /></IconButton></span>
+                          </Tooltip>
+                        ) : (
+                          <>
+                            <Tooltip title="Customer Statement"><IconButton size="small" color="primary" onClick={() => openStatement(c)}><ReceiptLong fontSize="small" /></IconButton></Tooltip>
+                            <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(c)}><Edit fontSize="small" /></IconButton></Tooltip>
+                            {isAdmin && <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDelete(c)}><Delete fontSize="small" /></IconButton></Tooltip>}
+                          </>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
                 {customers.length === 0 && (
                   <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>No customers found</TableCell></TableRow>
                 )}
