@@ -232,14 +232,15 @@ const removeTrip = async (req, res, next) => {
 // ── Cash accountability ─────────────────────────────────────────────────────
 const submitCash = async (req, res, next) => {
   try {
-    const { vehicleId, tripId, amount, currency, logDate, notes } = req.body;
+    const { vehicleId, tripId, amount, expense, currency, logDate, notes } = req.body;
     if (amount === undefined || isNaN(Number(amount)) || Number(amount) < 0) return res.status(400).json({ error: 'A valid cash amount is required' });
+    if (expense !== undefined && expense !== '' && (isNaN(Number(expense)) || Number(expense) < 0)) return res.status(400).json({ error: 'Expense must be a valid non-negative number' });
     if (vehicleId && !(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
     const cash = await prisma.fleetCashLog.create({
       data: {
         tenantId: getTenantId(), vehicleId: vehicleId || null, tripId: tripId || null,
         driverId: req.user.id, driverName: req.user.name,
-        amount: Number(amount), currency: (currency || 'SAR').toUpperCase().slice(0, 8),
+        amount: Number(amount), expense: num(expense) || 0, currency: (currency || 'SAR').toUpperCase().slice(0, 8),
         logDate: logDate ? new Date(logDate) : new Date(), submittedAt: new Date(),
         notes: notes || null, createdById: req.user.id,
       },
@@ -260,7 +261,8 @@ const listCash = async (req, res, next) => {
     if (ids) where.vehicleId = { in: ids }; // driver: own vehicles only
     const data = await prisma.fleetCashLog.findMany({ where, orderBy: { submittedAt: 'desc' }, take: 100, include: { vehicle: { select: { name: true, plateNumber: true } } } });
     const total = data.reduce((s, c) => s + Number(c.amount || 0), 0);
-    res.json({ data, totalAmount: +total.toFixed(2) });
+    const totalExpense = data.reduce((s, c) => s + Number(c.expense || 0), 0);
+    res.json({ data, totalAmount: +total.toFixed(2), totalExpense: +totalExpense.toFixed(2), totalNet: +(total - totalExpense).toFixed(2) });
   } catch (err) { next(err); }
 };
 

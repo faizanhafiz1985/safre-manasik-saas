@@ -47,11 +47,18 @@ import SuperAdminCrmPage from './pages/SuperAdminCrmPage';
 import SuperAdminCostPage from './pages/SuperAdminCostPage';
 import FleetPage from './pages/FleetPage';
 
-const PrivateRoute = ({ children, roles }) => {
+const PrivateRoute = ({ children, roles, perm }) => {
   const { user, loading } = useAuth();
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  if (roles && !roles.includes(user.role)) {
+    // Base role not allowed. A user governed by a custom tenant role (e.g. Driver
+    // keeps base role CUSTOMER) may still enter if they hold the required
+    // feature permission — this is what lets drivers reach Transport/Fleet.
+    const perms = new Set(user.permissions || []);
+    const allowed = !!user.customRoleId && perm && perms.has(perm);
+    if (!allowed) return <Navigate to="/dashboard" replace />;
+  }
   return children;
 };
 
@@ -84,7 +91,7 @@ export default function App() {
           <Route path="super-admin/hotels" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminHotelsPage /></PrivateRoute>} />
           <Route path="super-admin/crm" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminCrmPage /></PrivateRoute>} />
           <Route path="super-admin/costs" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminCostPage /></PrivateRoute>} />
-          <Route path="fleet" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><FleetPage /></PrivateRoute>} />
+          <Route path="fleet" element={<PrivateRoute roles={['ADMIN', 'AGENT']} perm="fleet_trips:view"><FleetPage /></PrivateRoute>} />
           <Route path="reports/daily-schedule" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><DailySchedulePage /></PrivateRoute>} />
           <Route path="reports/transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><TransportReportPage /></PrivateRoute>} />
           <Route path="settings" element={<PrivateRoute roles={['ADMIN']}><SettingsPage /></PrivateRoute>} />
@@ -93,7 +100,7 @@ export default function App() {
           <Route path="packages" element={<PackagesPage />} />
           <Route path="bookings" element={<BookingsPage />} />
           <Route path="bookings/:id" element={<BookingDetailPage />} />
-          <Route path="transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><TransportPage /></PrivateRoute>} />
+          <Route path="transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']} perm="transport:view"><TransportPage /></PrivateRoute>} />
           <Route path="catering" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CateringPage /></PrivateRoute>} />
           <Route path="hotels" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><HotelsPage /></PrivateRoute>} />
           <Route path="vouchers" element={<VouchersPage />} />

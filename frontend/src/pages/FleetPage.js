@@ -9,6 +9,7 @@ import {
   Speed, Warning, CheckCircle, Delete, AttachMoney, LocalGasStation,
 } from '@mui/icons-material';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
 const today = () => new Date().toISOString().substring(0, 10);
@@ -30,6 +31,7 @@ function getPosition() {
 }
 
 export default function FleetPage() {
+  const { user } = useAuth();
   const [tab, setTab] = useState(0);
   const [vehicles, setVehicles] = useState([]);
   const loadVehicles = useCallback(() => {
@@ -37,22 +39,36 @@ export default function FleetPage() {
   }, []);
   useEffect(() => { loadVehicles(); }, [loadVehicles]);
 
+  // Custom-role users (e.g. Driver) only see the fleet sections they're granted —
+  // a driver has no `fleet_dashboard` permission, so the Dashboard tab is hidden
+  // and they land on Trips. Base-role users (ADMIN/AGENT) see every tab as before.
+  const perms = new Set(user?.permissions || []);
+  const isCustomRole = !!user?.customRoleId;
+  const can = (f) => !isCustomRole || perms.has(`${f}:view`);
+  const tabs = [
+    can('fleet_dashboard') && { key: 'dashboard', label: 'Dashboard', icon: <Speed />, render: () => <DashboardTab /> },
+    can('fleet_trips') && { key: 'trips', label: 'Trips', icon: <RouteIcon />, render: () => <TripsTab vehicles={vehicles} /> },
+    can('fleet_cash') && { key: 'cash', label: 'Cash Log', icon: <AttachMoney />, render: () => <CashTab vehicles={vehicles} /> },
+    can('fleet_maintenance') && { key: 'maintenance', label: 'Maintenance', icon: <Build />, render: () => <MaintenanceTab onChange={loadVehicles} /> },
+  ].filter(Boolean);
+  const active = Math.min(tab, Math.max(0, tabs.length - 1));
+
   return (
     <Box>
       <Box sx={{ mb: 2 }}>
         <Typography variant="h5" fontWeight={700} color="#1B4B35">Fleet Management</Typography>
         <Typography variant="body2" color="text.secondary">Trip tracking, cash accountability and maintenance alerts for your vehicles.</Typography>
       </Box>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto">
-        <Tab icon={<Speed />} iconPosition="start" label="Dashboard" />
-        <Tab icon={<RouteIcon />} iconPosition="start" label="Trips" />
-        <Tab icon={<AttachMoney />} iconPosition="start" label="Cash Log" />
-        <Tab icon={<Build />} iconPosition="start" label="Maintenance" />
-      </Tabs>
-      {tab === 0 && <DashboardTab />}
-      {tab === 1 && <TripsTab vehicles={vehicles} />}
-      {tab === 2 && <CashTab vehicles={vehicles} />}
-      {tab === 3 && <MaintenanceTab onChange={loadVehicles} />}
+      {tabs.length === 0 ? (
+        <Alert severity="info">You don't have access to any fleet sections.</Alert>
+      ) : (
+        <>
+          <Tabs value={active} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto">
+            {tabs.map((t) => <Tab key={t.key} icon={t.icon} iconPosition="start" label={t.label} />)}
+          </Tabs>
+          {tabs[active].render()}
+        </>
+      )}
     </Box>
   );
 }
@@ -252,13 +268,14 @@ function TripsTab({ vehicles }) {
 
 // ── Cash ──────────────────────────────────────────────────────────────────────
 function CashTab({ vehicles }) {
-  const [data, setData] = useState({ data: [], totalAmount: 0 });
-  const [form, setForm] = useState({ vehicleId: '', amount: '', logDate: today(), notes: '' });
+  const [data, setData] = useState({ data: [], totalAmount: 0, totalExpense: 0, totalNet: 0 });
+  const [form, setForm] = useState({ vehicleId: '', amount: '', expense: '', logDate: today(), notes: '' });
   const load = useCallback(() => { api.get('/fleet/cash').then((r) => setData(r.data)).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
   const submit = async () => {
     if (form.amount === '' || Number(form.amount) < 0) return toast.error('Enter a valid amount');
-    try { await api.post('/fleet/cash', form); toast.success('Cash submitted'); setForm({ vehicleId: '', amount: '', logDate: today(), notes: '' }); load(); }
+    if (form.expense !== '' && Number(form.expense) < 0) return toast.error('Expense cannot be negative');
+    try { await api.post('/fleet/cash', form); toast.success('Cash submitted'); setForm({ vehicleId: '', amount: '', expense: '', logDate: today(), notes: '' }); load(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
   return (
@@ -271,6 +288,8 @@ function CashTab({ vehicles }) {
             {vehicles.map((v) => <MenuItem key={v.id} value={v.id}>{v.name}</MenuItem>)}
           </TextField>
           <TextField size="small" label="Amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+          <TextField size="small" label="Expense" type="number" value={form.expense} onChange={(e) => setForm((f) => ({ ...f, expense: e.target.value }))} />
+          <TextField size="small" label="Net Total" value={SAR((Number(form.amount) || 0) - (Number(form.expense) || 0))} InputProps={{ readOnly: true }} sx={{ minWidth: 120 }} />
           <TextField size="small" type="date" label="Date" value={form.logDate} onChange={(e) => setForm((f) => ({ ...f, logDate: e.target.value }))} InputLabelProps={{ shrink: true }} />
           <TextField size="small" label="Notes" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} sx={{ flex: 1 }} />
           <Button variant="contained" startIcon={<Paid />} onClick={submit}>Submit</Button>
@@ -279,14 +298,17 @@ function CashTab({ vehicles }) {
       <Card>
         <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
           <Typography variant="subtitle2">Recent Cash Submissions</Typography>
-          <Typography variant="subtitle2" color="primary.main">Total: {SAR(data.totalAmount)}</Typography>
+          <Typography variant="subtitle2" color="primary.main">
+            Amount: {SAR(data.totalAmount)} · Expense: {SAR(data.totalExpense)} · Net: {SAR(data.totalNet)}
+          </Typography>
         </Box>
         <Divider />
         <Box sx={{ overflowX: 'auto' }}>
           <Table size="small">
             <TableHead><TableRow sx={{ bgcolor: '#F3F8F5' }}>
               <TableCell><strong>Submitted</strong></TableCell><TableCell><strong>For Date</strong></TableCell><TableCell><strong>Driver</strong></TableCell>
-              <TableCell><strong>Vehicle</strong></TableCell><TableCell align="right"><strong>Amount</strong></TableCell><TableCell><strong>Notes</strong></TableCell>
+              <TableCell><strong>Vehicle</strong></TableCell><TableCell align="right"><strong>Amount</strong></TableCell>
+              <TableCell align="right"><strong>Expense</strong></TableCell><TableCell align="right"><strong>Net Total</strong></TableCell><TableCell><strong>Notes</strong></TableCell>
             </TableRow></TableHead>
             <TableBody>
               {data.data.map((c) => (
@@ -296,10 +318,12 @@ function CashTab({ vehicles }) {
                   <TableCell>{c.driverName || '—'}</TableCell>
                   <TableCell>{c.vehicle?.name || '—'}</TableCell>
                   <TableCell align="right">{SAR(c.amount)}</TableCell>
+                  <TableCell align="right">{SAR(c.expense)}</TableCell>
+                  <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell>
                   <TableCell><Typography variant="caption">{c.notes || ''}</Typography></TableCell>
                 </TableRow>
               ))}
-              {data.data.length === 0 && <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>No cash submissions yet.</TableCell></TableRow>}
+              {data.data.length === 0 && <TableRow><TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>No cash submissions yet.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </Box>

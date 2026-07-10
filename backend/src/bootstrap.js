@@ -563,6 +563,8 @@ async function ensureFleetTables() {
         "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fc_tenant_date ON fleet_cash_logs("tenantId","logDate")`);
+    // Expense column on cash logs (net total = amount - expense). Idempotent.
+    await prisma.$executeRawUnsafe(`ALTER TABLE fleet_cash_logs ADD COLUMN IF NOT EXISTS "expense" DECIMAL(10,2) NOT NULL DEFAULT 0`);
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS fleet_maintenance (
@@ -588,6 +590,70 @@ async function ensureFleetTables() {
   }
 }
 
+// Backfill the unified customer registry for direct vouchers that predate the
+// write-time sync (or whose best-effort sync failed). For every FormVoucher with
+// no linked customer but a usable mobile, find or create a CUSTOMER-role User in
+// the same tenant and set the voucher's customerId — so voucher customers show
+// up in the Customers tab. Idempotent and self-limiting (once linked, a voucher
+// is skipped forever). Mirrors resolveVoucherCustomer() in formVoucherController.
+async function ensureVoucherCustomerBackfill() {
+  try {
+    const rows = await prisma.$queryRawUnsafe(`
+      SELECT id, "tenantId", "firstName", "lastName", "companyName", mobile
+      FROM form_vouchers
+      WHERE "customerId" IS NULL AND mobile IS NOT NULL AND mobile <> ''
+    `);
+    if (!rows.length) { logger.info('[bootstrap] voucher customer backfill: nothing to do'); return; }
+
+    const bcrypt = require('bcryptjs');
+    const crypto = require('crypto');
+    let linked = 0, created = 0;
+
+    for (const v of rows) {
+      try {
+        const mobile = String(v.mobile).replace(/\s/g, '');
+        if (!mobile) continue;
+
+        // Same mobile = same customer, scoped to the voucher's tenant.
+        const existing = await prisma.$queryRawUnsafe(
+          `SELECT id FROM users WHERE "tenantId" = $1 AND role = 'CUSTOMER' AND phone = $2 LIMIT 1`,
+          v.tenantId, mobile,
+        );
+        let customerId = existing[0]?.id;
+
+        if (!customerId) {
+          const name = `${(v.firstName || '').trim()} ${(v.lastName || '').trim()}`.trim() || 'Customer';
+          const company = v.companyName ? String(v.companyName).trim() : null;
+          const password = await bcrypt.hash(crypto.randomBytes(12).toString('base64url'), 12);
+          const insertUser = async (email) => prisma.$queryRawUnsafe(
+            `INSERT INTO users (id, name, email, password, role, "tenantId", phone, "companyName", "isActive", "customerType", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, 'CUSTOMER', $4, $5, $6, true, 'B2C', NOW(), NOW())
+             RETURNING id`,
+            name, email, password, v.tenantId, mobile, company,
+          );
+          try {
+            const ins = await insertUser(`c${mobile}@customers.safremanasik.com`);
+            customerId = ins[0].id; created++;
+          } catch (e) {
+            // Email is globally unique — clash (same mobile in another tenant) → random suffix.
+            const ins = await insertUser(`c${mobile}.${crypto.randomBytes(3).toString('hex')}@customers.safremanasik.com`);
+            customerId = ins[0].id; created++;
+          }
+        }
+
+        await prisma.$executeRawUnsafe(`UPDATE form_vouchers SET "customerId" = $1 WHERE id = $2`, customerId, v.id);
+        linked++;
+      } catch (rowErr) {
+        // One bad row must not abort the whole backfill — log and move on.
+        logger.warn(`[bootstrap] voucher customer backfill: skipped voucher ${v.id}: ${rowErr.message}`);
+      }
+    }
+    logger.info(`[bootstrap] voucher customer backfill: linked ${linked} voucher(s), created ${created} new customer(s)`);
+  } catch (err) {
+    logger.error(`[bootstrap] ensureVoucherCustomerBackfill failed: ${err.message}`);
+  }
+}
+
 async function runBootstrap() {
   logger.info('[bootstrap] Running startup tasks...');
   await purgeAllTenantsIfRequested(); // runs only if PURGE_ALL_TENANTS=true
@@ -602,6 +668,7 @@ async function runBootstrap() {
   await ensureRbacTables();
   await ensurePlatformCostTables();
   await ensureFleetTables();
+  await ensureVoucherCustomerBackfill();
   logger.info('[bootstrap] Startup tasks complete.');
 }
 

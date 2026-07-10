@@ -31,7 +31,7 @@ const navItems = [
   { label: 'Vouchers',        icon: <ConfirmationNumber />, path: '/vouchers',                  roles: ['ADMIN','AGENT','CUSTOMER'], feature: 'vouchers' },
   { label: 'Direct Vouchers', icon: <Receipt />,            path: '/voucher-forms',             roles: ['ADMIN','AGENT'], feature: 'voucher_forms' },
   { label: 'Transport',       icon: <DirectionsBus />,      path: '/transport',                 roles: ['ADMIN','AGENT'], feature: 'transport' },
-  { label: 'Fleet Management',icon: <DirectionsCar />,      path: '/fleet',                     roles: ['ADMIN','AGENT'], feature: 'fleet_dashboard' },
+  { label: 'Fleet Management',icon: <DirectionsCar />,      path: '/fleet',                     roles: ['ADMIN','AGENT'], features: ['fleet_dashboard','fleet_trips','fleet_cash','fleet_maintenance'] },
   { label: 'Catering',        icon: <Restaurant />,         path: '/catering',                  roles: ['ADMIN','AGENT'], feature: 'catering' },
   { label: 'Hotels',          icon: <Hotel />,              path: '/hotels',                    roles: ['ADMIN','AGENT'], feature: 'hotels' },
   { label: 'Payments',        icon: <Payment />,            path: '/payments',                  roles: ['ADMIN','AGENT'], feature: 'payments' },
@@ -77,9 +77,23 @@ export default function Sidebar({ onClose }) {
   // so behaviour is unchanged.
   const perms = new Set(user?.permissions || []);
   const hasPerms = perms.size > 0;
+  // A user assigned a custom tenant role (e.g. Driver) keeps their base `role`
+  // enum (often CUSTOMER) but is governed entirely by effective permissions.
+  // For them we bypass the legacy role backstop and gate purely on `${feature}:view`.
+  const isCustomRole = !!user?.customRoleId;
   const filtered = navItems.filter(item => {
+    // Platform (super-admin) tabs are role-gated only.
+    if (item.section === 'platform') return item.roles.includes(user?.role);
+
+    if (isCustomRole) {
+      // Custom role: permission-driven only — show a tab solely on `${feature}:view`.
+      if (item.feature) return perms.has(`${item.feature}:view`);
+      if (item.features) return item.features.some((f) => perms.has(`${f}:view`));
+      return false; // no feature key → not part of a custom role's surface
+    }
+
+    // Legacy base-role users (ADMIN / AGENT / CUSTOMER): unchanged behavior.
     if (!item.roles.includes(user?.role)) return false;          // role backstop
-    if (item.section === 'platform') return true;                // platform tabs: role only
     if (hasPerms && item.feature) return perms.has(`${item.feature}:view`);
     // A merged tab may map to several features — show it if ANY is permitted.
     if (hasPerms && item.features) return item.features.some((f) => perms.has(`${f}:view`));
