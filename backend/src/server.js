@@ -145,6 +145,16 @@ if (require.main === module) {
     } catch (err) {
       logger.error(`Uptime monitor failed to start: ${err.message}`);
     }
+    // Daily vehicle-document expiry scan: emails the driver + tenant contact and
+    // opens a confirmation task when any compliance document is due. Runs shortly
+    // after boot, then every 24h. unref() so it never blocks shutdown.
+    try {
+      const { scanAllTenants } = require('./services/fleetDocsService');
+      setTimeout(() => { scanAllTenants().catch((e) => logger.error(`[fleetdocs] initial scan: ${e.message}`)); }, 60 * 1000).unref();
+      setInterval(() => { scanAllTenants().catch((e) => logger.error(`[fleetdocs] scan: ${e.message}`)); }, 24 * 60 * 60 * 1000).unref();
+    } catch (err) {
+      logger.error(`Fleet document scanner failed to start: ${err.message}`);
+    }
   });
   const shutdown = (signal) => {
     logger.info(`${signal} received. Shutting down gracefully...`);

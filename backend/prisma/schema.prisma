@@ -595,6 +595,21 @@ model Vehicle {
   oilChangeIntervalKm   Int      @default(5000) // alert threshold
   lastOilChangeOdometer Int      @default(0)    // odometer at last oil change
 
+  // ── Compliance documents (expiry dates). "Due" = expiry < today. ──────────
+  istimaraExpiry    DateTime? // vehicle registration (Istimara)
+  iqamaExpiry       DateTime? // driver Iqama
+  kartashkeelExpiry DateTime? // Kart Tashkeel (operating card)
+  licenseExpiry     DateTime? // driver licence
+  bathakaSaicExpiry DateTime? // Bathaka SAIC card
+  ajeerExpiry       DateTime? // Ajeer permit
+  tameenExpiry      DateTime? // Tameen (insurance)
+  fahasExpiry       DateTime? // Fahas (vehicle inspection)
+  nusuk             Boolean   @default(false) // Nusuk compliance (yes/no)
+  docAlertState     Json?     // { docKey: "<ISO expiry already alerted>" } — email dedup
+  docReviewPending  Boolean   @default(false) // open "confirm documents" task
+  docsConfirmedAt   DateTime? // last confirmation that documents are valid
+  docsConfirmedById String?
+
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   routes            Route[]
   bookingTransports BookingTransport[]

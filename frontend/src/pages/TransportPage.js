@@ -124,7 +124,25 @@ export default function TransportPage() {
     }
   };
 
-  const openVehicle = (v = null) => { setEditVehicle(v); resetV(v || { type: 'BUS', capacity: 20, isAvailable: true }); setVehicleDialog(true); };
+  const openVehicle = (v = null) => {
+    setEditVehicle(v);
+    const d = (x) => (x ? String(x).slice(0, 10) : ''); // ISO → YYYY-MM-DD for date inputs
+    if (v) {
+      resetV({
+        ...v,
+        istimaraExpiry: d(v.istimaraExpiry), iqamaExpiry: d(v.iqamaExpiry), kartashkeelExpiry: d(v.kartashkeelExpiry),
+        licenseExpiry: d(v.licenseExpiry), bathakaSaicExpiry: d(v.bathakaSaicExpiry), ajeerExpiry: d(v.ajeerExpiry),
+        tameenExpiry: d(v.tameenExpiry), fahasExpiry: d(v.fahasExpiry), nusuk: v.nusuk ? 'true' : 'false',
+      });
+    } else {
+      resetV({
+        type: 'BUS', capacity: 20, isAvailable: true, nusuk: 'false',
+        istimaraExpiry: '', iqamaExpiry: '', kartashkeelExpiry: '', licenseExpiry: '',
+        bathakaSaicExpiry: '', ajeerExpiry: '', tameenExpiry: '', fahasExpiry: '',
+      });
+    }
+    setVehicleDialog(true);
+  };
   const openRoute   = (r = null) => { setEditRoute(r);   resetR(r || {}); setRouteDialog(true); };
 
   // ── Add Trip (driver enters From / To / km; odometer advances automatically) ─
@@ -361,6 +379,31 @@ export default function TransportPage() {
               <Grid item xs={6}>
                 <TextField fullWidth label="Oil Change Interval (km)" type="number" defaultValue={5000} inputProps={{ min: 0, onKeyDown: numericOnly }}
                   {...regV('oilChangeIntervalKm', { valueAsNumber: true })} />
+              </Grid>
+              {/* ── Compliance documents (all mandatory; expiry dates) ── */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 1 }}><Chip label="Compliance Documents (all required)" size="small" /></Divider>
+              </Grid>
+              {[
+                ['istimaraExpiry', 'Istimara'], ['iqamaExpiry', 'Iqama'], ['kartashkeelExpiry', 'Kart Tashkeel'],
+                ['licenseExpiry', 'License'], ['bathakaSaicExpiry', 'Bathaka SAIC'], ['ajeerExpiry', 'Ajeer'],
+                ['tameenExpiry', 'Tameen'], ['fahasExpiry', 'Fahas'],
+              ].map(([key, label]) => (
+                <Grid item xs={12} sm={6} md={4} key={key}>
+                  <TextField fullWidth type="date" label={`${label} Expiry *`} InputLabelProps={{ shrink: true }}
+                    error={!!errV[key]} helperText={errV[key]?.message}
+                    {...regV(key, { required: `${label} date is required` })} />
+                </Grid>
+              ))}
+              <Grid item xs={12} sm={6} md={4}>
+                <Controller name="nusuk" control={ctrlV} defaultValue={editVehicle?.nusuk ? 'true' : 'false'}
+                  rules={{ required: 'Nusuk is required' }}
+                  render={({ field }) => (
+                    <TextField {...field} fullWidth select label="Nusuk *" error={!!errV.nusuk} helperText={errV.nusuk?.message}>
+                      <MenuItem value="true">Yes</MenuItem>
+                      <MenuItem value="false">No</MenuItem>
+                    </TextField>
+                  )} />
               </Grid>
               <Grid item xs={12}>
                 <TextField fullWidth label="Notes" {...regV('notes')} />

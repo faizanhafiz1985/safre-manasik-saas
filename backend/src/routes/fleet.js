@@ -27,6 +27,10 @@ router.get('/maintenance', requirePermission('fleet_maintenance', 'view'), ctrl.
 router.get('/maintenance/:id/receipt', requirePermission('fleet_maintenance', 'view'), ctrl.getReceipt);
 router.post('/maintenance/confirm', requirePermission('fleet_maintenance', 'edit'), ctrl.confirmMaintenance);
 
+// Vehicle compliance documents (expiry tracking + confirmation task)
+router.get('/documents', requirePermission('fleet_maintenance', 'view'), ctrl.listDocuments);
+router.post('/documents/:id/confirm', requirePermission('fleet_maintenance', 'edit'), ctrl.confirmDocuments);
+
 // Central dashboard
 router.get('/dashboard', requirePermission('fleet_dashboard', 'view'), ctrl.dashboard);
 

@@ -524,6 +524,14 @@ async function ensureFleetTables() {
     }
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "oilChangeIntervalKm" INTEGER NOT NULL DEFAULT 5000`);
     await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "lastOilChangeOdometer" INTEGER NOT NULL DEFAULT 0`);
+    // Compliance document expiry dates + Nusuk flag + alert/confirmation tracking.
+    for (const col of ['istimaraExpiry', 'iqamaExpiry', 'kartashkeelExpiry', 'licenseExpiry', 'bathakaSaicExpiry', 'ajeerExpiry', 'tameenExpiry', 'fahasExpiry', 'docsConfirmedAt']) {
+      await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "${col}" TIMESTAMPTZ`);
+    }
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "nusuk" BOOLEAN NOT NULL DEFAULT false`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "docAlertState" JSONB`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "docReviewPending" BOOLEAN NOT NULL DEFAULT false`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS "docsConfirmedById" VARCHAR(36)`);
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS fleet_trips (

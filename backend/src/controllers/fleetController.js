@@ -5,6 +5,7 @@
 const prisma = require('../config/database');
 const { getTenantId } = require('../config/tenantContext');
 const { getFleetScope } = require('../utils/fleetScope');
+const { vehicleDocSummary } = require('../services/fleetDocsService');
 
 // Returns null when the user is fleet-wide (no restriction), otherwise the array
 // of vehicle ids assigned to them (driver assignment-scope).
@@ -417,7 +418,42 @@ const dashboard = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── Vehicle documents (compliance expiry) ─────────────────────────────────────
+// Lists each vehicle's document statuses. Drivers see only their assigned vehicles.
+const listDocuments = async (req, res, next) => {
+  try {
+    const ids = await myVehicleIds(req);
+    const where = ids ? { id: { in: ids } } : {};
+    const vehicles = await prisma.vehicle.findMany({ where, orderBy: { name: 'asc' } });
+    const now = new Date();
+    const data = vehicles.map((v) => {
+      const s = vehicleDocSummary(v, now);
+      return {
+        id: v.id, name: v.name, plateNumber: v.plateNumber, driverName: v.driverName,
+        nusuk: v.nusuk === true, docs: s.docs, overdueCount: s.overdue.length,
+        hasIssues: s.hasIssues, docReviewPending: !!v.docReviewPending, docsConfirmedAt: v.docsConfirmedAt,
+      };
+    });
+    res.json({ data });
+  } catch (err) { next(err); }
+};
+
+// Confirms the documents are valid — clears the open review task (audited).
+const confirmDocuments = async (req, res, next) => {
+  try {
+    const v = await prisma.vehicle.findFirst({ where: { id: req.params.id } });
+    if (!v) return res.status(404).json({ error: 'Vehicle not found' });
+    if (!(await vehicleAllowed(req, v.id))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
+    await prisma.vehicle.updateMany({
+      where: { id: v.id },
+      data: { docReviewPending: false, docsConfirmedAt: new Date(), docsConfirmedById: req.user.id },
+    });
+    res.json({ message: 'Documents confirmed' });
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   startTrip, addPoint, stopTrip, createTrip, listTrips, removeTrip,
   submitCash, listCash, alerts, confirmMaintenance, listMaintenance, getReceipt, dashboard,
+  listDocuments, confirmDocuments,
 };

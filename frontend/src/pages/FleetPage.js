@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import {
   PlayArrow, Stop, MyLocation, Add, Paid, Build, DirectionsCar, Route as RouteIcon,
-  Speed, Warning, CheckCircle, Delete, AttachMoney, LocalGasStation,
+  Speed, Warning, CheckCircle, Delete, AttachMoney, LocalGasStation, Badge,
 } from '@mui/icons-material';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,7 @@ const today = () => new Date().toISOString().substring(0, 10);
 const SAR = (n) => `SAR ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 const km = (n) => `${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })} km`;
 const fmtDT = (d) => (d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
+const fmtD = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const OIL = { DUE: { label: 'Oil Due', color: 'error' }, SOON: { label: 'Oil Soon', color: 'warning' }, OK: { label: 'OK', color: 'success' } };
 
 // Browser GPS — resolves {lat,lng} or null (with a toast on failure).
@@ -50,6 +51,7 @@ export default function FleetPage() {
     can('fleet_trips') && { key: 'trips', label: 'Trips', icon: <RouteIcon />, render: () => <TripsTab vehicles={vehicles} /> },
     can('fleet_cash') && { key: 'cash', label: 'Cash Log', icon: <AttachMoney />, render: () => <CashTab vehicles={vehicles} /> },
     can('fleet_maintenance') && { key: 'maintenance', label: 'Maintenance', icon: <Build />, render: () => <MaintenanceTab onChange={loadVehicles} /> },
+    can('fleet_maintenance') && { key: 'documents', label: 'Documents', icon: <Badge />, render: () => <DocumentsTab /> },
   ].filter(Boolean);
   const active = Math.min(tab, Math.max(0, tabs.length - 1));
 
@@ -431,6 +433,71 @@ function MaintenanceTab({ onChange }) {
           <Button variant="contained" color="success" startIcon={<CheckCircle />} onClick={() => confirm(true)}>Completed</Button>
         </DialogActions>
       </Dialog>
+    </Box>
+  );
+}
+
+// ── Documents ───────────────────────────────────────────────────────────────
+// Per-vehicle compliance document expiry statuses + the "confirm dates valid"
+// task. A document is "due" when its expiry is before today.
+function DocumentsTab() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get('/fleet/documents').then((r) => setData(r.data.data || [])).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const confirm = async (v) => {
+    try { await api.post(`/fleet/documents/${v.id}/confirm`); toast.success('Documents confirmed'); load(); }
+    catch (e) { toast.error(e.response?.data?.error || 'Failed to confirm'); }
+  };
+
+  const docChip = (d) => {
+    if (d.status === 'overdue') return <Chip size="small" color="error" label={`Expired ${fmtD(d.date)}`} />;
+    if (d.status === 'soon') return <Chip size="small" color="warning" label={`${fmtD(d.date)} (${d.daysLeft}d)`} />;
+    if (d.status === 'missing') return <Chip size="small" variant="outlined" label="Not set" />;
+    return <Chip size="small" color="success" variant="outlined" label={fmtD(d.date)} />;
+  };
+
+  if (loading) return <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress /></Box>;
+  if (!data.length) return <Alert severity="info">No vehicles to show.</Alert>;
+
+  return (
+    <Box>
+      {data.map((v) => (
+        <Card key={v.id} sx={{ mb: 2, border: v.docReviewPending ? '1px solid #DC2626' : undefined }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+              <Box>
+                <Typography fontWeight={700}>{v.name} · {v.plateNumber}</Typography>
+                <Typography variant="caption" color="text.secondary">{v.driverName || 'No driver'}</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                {v.docReviewPending
+                  ? <Chip size="small" color="error" label="Review pending" />
+                  : (v.docsConfirmedAt ? <Chip size="small" color="success" variant="outlined" label={`Confirmed ${fmtDT(v.docsConfirmedAt)}`} /> : <Chip size="small" color="success" variant="outlined" label="All valid" />)}
+                {v.docReviewPending && (
+                  <Button size="small" variant="contained" startIcon={<CheckCircle />} onClick={() => confirm(v)}>Confirm dates valid</Button>
+                )}
+              </Box>
+            </Box>
+            <Grid container spacing={1.5}>
+              {v.docs.map((d) => (
+                <Grid item xs={6} sm={4} md={3} key={d.key}>
+                  <Typography variant="caption" color="text.secondary" display="block">{d.label}</Typography>
+                  {docChip(d)}
+                </Grid>
+              ))}
+              <Grid item xs={6} sm={4} md={3}>
+                <Typography variant="caption" color="text.secondary" display="block">Nusuk</Typography>
+                <Chip size="small" color={v.nusuk ? 'success' : 'warning'} label={v.nusuk ? 'Yes' : 'No'} />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      ))}
     </Box>
   );
 }
