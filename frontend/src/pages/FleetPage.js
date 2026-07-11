@@ -270,6 +270,8 @@ function TripsTab({ vehicles }) {
 
 // ── Cash ──────────────────────────────────────────────────────────────────────
 function CashTab({ vehicles }) {
+  const { user } = useAuth();
+  const canDelete = user?.role === 'ADMIN'; // delete route is ADMIN-only
   const [data, setData] = useState({ data: [], totalAmount: 0, totalExpense: 0, totalNet: 0 });
   const [form, setForm] = useState({ vehicleId: '', amount: '', expense: '', logDate: today(), notes: '' });
   const load = useCallback(() => { api.get('/fleet/cash').then((r) => setData(r.data)).catch(() => {}); }, []);
@@ -280,6 +282,7 @@ function CashTab({ vehicles }) {
     try { await api.post('/fleet/cash', form); toast.success('Cash submitted'); setForm({ vehicleId: '', amount: '', expense: '', logDate: today(), notes: '' }); load(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
+  const del = async (c) => { if (!window.confirm('Delete this cash entry?')) return; try { await api.delete(`/fleet/cash/${c.id}`); toast.success('Deleted'); load(); } catch (e) { toast.error(e.response?.data?.error || 'Failed'); } };
   return (
     <Box>
       <Card sx={{ mb: 2 }}><CardContent>
@@ -311,6 +314,7 @@ function CashTab({ vehicles }) {
               <TableCell><strong>Submitted</strong></TableCell><TableCell><strong>For Date</strong></TableCell><TableCell><strong>Driver</strong></TableCell>
               <TableCell><strong>Vehicle</strong></TableCell><TableCell align="right"><strong>Amount</strong></TableCell>
               <TableCell align="right"><strong>Expense</strong></TableCell><TableCell align="right"><strong>Net Total</strong></TableCell><TableCell><strong>Notes</strong></TableCell>
+              {canDelete && <TableCell align="right"></TableCell>}
             </TableRow></TableHead>
             <TableBody>
               {data.data.map((c) => (
@@ -323,9 +327,10 @@ function CashTab({ vehicles }) {
                   <TableCell align="right">{SAR(c.expense)}</TableCell>
                   <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell>
                   <TableCell><Typography variant="caption">{c.notes || ''}</Typography></TableCell>
+                  {canDelete && <TableCell align="right"><Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => del(c)}><Delete fontSize="small" /></IconButton></Tooltip></TableCell>}
                 </TableRow>
               ))}
-              {data.data.length === 0 && <TableRow><TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>No cash submissions yet.</TableCell></TableRow>}
+              {data.data.length === 0 && <TableRow><TableCell colSpan={canDelete ? 9 : 8} align="center" sx={{ py: 4, color: 'text.secondary' }}>No cash submissions yet.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </Box>

@@ -230,6 +230,14 @@ const removeTrip = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const removeCash = async (req, res, next) => {
+  try {
+    const result = await prisma.fleetCashLog.deleteMany({ where: { id: req.params.id } });
+    if (result.count === 0) return res.status(404).json({ error: 'Cash entry not found' });
+    res.json({ message: 'Cash entry deleted' });
+  } catch (err) { next(err); }
+};
+
 // ── Cash accountability ─────────────────────────────────────────────────────
 const submitCash = async (req, res, next) => {
   try {
@@ -454,6 +462,6 @@ const confirmDocuments = async (req, res, next) => {
 
 module.exports = {
   startTrip, addPoint, stopTrip, createTrip, listTrips, removeTrip,
-  submitCash, listCash, alerts, confirmMaintenance, listMaintenance, getReceipt, dashboard,
+  submitCash, listCash, removeCash, alerts, confirmMaintenance, listMaintenance, getReceipt, dashboard,
   listDocuments, confirmDocuments,
 };

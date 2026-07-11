@@ -524,6 +524,7 @@ export default function TransportPage() {
 
 // ── Per-vehicle Cash Log + Maintenance panel ──────────────────────────────────
 function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
+  const { isAdmin } = useAuth(); // cash delete route is ADMIN-only
   const [tab, setTab] = useState(vehicle._tab === 'maint' ? 1 : 0);
   const [cash, setCash] = useState({ data: [], totalAmount: 0, totalExpense: 0, totalNet: 0 });
   const [cashForm, setCashForm] = useState({ amount: '', expense: '', logDate: new Date().toISOString().substring(0, 10), notes: '' });
@@ -547,6 +548,7 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
     try { await api.post('/fleet/cash', { vehicleId: vehicle.id, ...cashForm }); toast.success('Cash submitted'); setCashForm({ amount: '', expense: '', logDate: new Date().toISOString().substring(0, 10), notes: '' }); loadCash(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
+  const delCash = async (c) => { if (!window.confirm('Delete this cash entry?')) return; try { await api.delete(`/fleet/cash/${c.id}`); toast.success('Deleted'); loadCash(); } catch (e) { toast.error(e.response?.data?.error || 'Failed'); } };
   const [maintFile, setMaintFile] = useState(null);
   const confirmOil = async (completed) => {
     try {
@@ -602,16 +604,17 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
               <Typography variant="caption" color="primary.main">Amt {SAR(cash.totalAmount)} · Exp {SAR(cash.totalExpense)} · Net {SAR(cash.totalNet)}</Typography>
             </Box>
             <Table size="small">
-              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell></TableRow></TableHead>
+              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell>{isAdmin && <TableCell align="right"></TableCell>}</TableRow></TableHead>
               <TableBody>
                 {cash.data.map((c) => (
                   <TableRow key={c.id}><TableCell><Typography variant="caption">{new Date(c.submittedAt).toLocaleString()}</Typography></TableCell>
                     <TableCell><Typography variant="caption">{new Date(c.logDate).toLocaleDateString()}</Typography></TableCell>
                     <TableCell align="right">{SAR(c.amount)}</TableCell>
                     <TableCell align="right">{SAR(c.expense)}</TableCell>
-                    <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell></TableRow>
+                    <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell>
+                    {isAdmin && <TableCell align="right"><Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => delCash(c)}><Delete fontSize="small" /></IconButton></Tooltip></TableCell>}</TableRow>
                 ))}
-                {cash.data.length === 0 && <TableRow><TableCell colSpan={5} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
+                {cash.data.length === 0 && <TableRow><TableCell colSpan={isAdmin ? 6 : 5} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
               </TableBody>
             </Table>
           </>

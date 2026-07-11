@@ -47,17 +47,48 @@ import SuperAdminCrmPage from './pages/SuperAdminCrmPage';
 import SuperAdminCostPage from './pages/SuperAdminCostPage';
 import FleetPage from './pages/FleetPage';
 
+// Where to send a user after login / when they hit a page they can't access.
+// Base-role users keep the legacy /dashboard landing. A custom-role user (e.g.
+// Driver) whose grants were trimmed lands on the first module they CAN see, so
+// removing dashboard access actually takes effect. /profile is always reachable,
+// so this can never loop.
+function homePath(user) {
+  if (user?.role === 'SUPER_ADMIN') return '/super-admin';
+  if (!user?.customRoleId) return '/dashboard'; // base roles unchanged
+  const perms = new Set(user.permissions || []);
+  const order = [
+    ['dashboard:view', '/dashboard'],
+    ['fleet_trips:view', '/fleet'],
+    ['fleet_dashboard:view', '/fleet'],
+    ['transport:view', '/transport'],
+    ['bookings:view', '/bookings'],
+    ['packages:view', '/packages'],
+    ['vouchers:view', '/vouchers'],
+    ['voucher_forms:view', '/voucher-forms'],
+    ['customers:view', '/customers'],
+  ];
+  for (const [p, route] of order) if (perms.has(p)) return route;
+  return '/profile';
+}
+
 const PrivateRoute = ({ children, roles, perm }) => {
   const { user, loading } = useAuth();
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
   if (!user) return <Navigate to="/login" replace />;
+  const perms = new Set(user.permissions || []);
+  const isCustom = !!user.customRoleId;
+  const home = homePath(user);
   if (roles && !roles.includes(user.role)) {
     // Base role not allowed. A user governed by a custom tenant role (e.g. Driver
     // keeps base role CUSTOMER) may still enter if they hold the required
     // feature permission — this is what lets drivers reach Transport/Fleet.
-    const perms = new Set(user.permissions || []);
-    const allowed = !!user.customRoleId && perm && perms.has(perm);
-    if (!allowed) return <Navigate to="/dashboard" replace />;
+    const allowed = isCustom && perm && perms.has(perm);
+    if (!allowed) return <Navigate to={home} replace />;
+  } else if (perm && isCustom && !perms.has(perm)) {
+    // Perm-only routes (dashboard/packages/bookings/vouchers were open to any
+    // logged-in user). Enforce the grant for custom-role users only — base-role
+    // users keep legacy open access (their permission set may be empty).
+    return <Navigate to={home} replace />;
   }
   return children;
 };
@@ -66,7 +97,7 @@ export default function App() {
   const { loading, user } = useAuth();
   if (loading) return <ThemeProvider theme={theme}><CssBaseline /><Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress size={48} /></Box></ThemeProvider>;
 
-  const homeRoute = user?.role === 'SUPER_ADMIN' ? '/super-admin' : '/dashboard';
+  const homeRoute = homePath(user);
 
   return (
     <ThemeProvider theme={theme}>
@@ -83,7 +114,7 @@ export default function App() {
         <Route path="/payment/paypal/success" element={<PrivateRoute><PayPalSuccessPage /></PrivateRoute>} />
         <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
           <Route index element={<Navigate to={homeRoute} replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="dashboard" element={<PrivateRoute perm="dashboard:view"><DashboardPage /></PrivateRoute>} />
           <Route path="super-admin" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminDashboardPage /></PrivateRoute>} />
           <Route path="super-admin/plans" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminPlansPage /></PrivateRoute>} />
           <Route path="super-admin/applications" element={<PrivateRoute roles={['SUPER_ADMIN']}><SuperAdminApplicationsPage /></PrivateRoute>} />
@@ -97,13 +128,13 @@ export default function App() {
           <Route path="settings" element={<PrivateRoute roles={['ADMIN']}><SettingsPage /></PrivateRoute>} />
           {/* Old routes kept so existing links/bookmarks resolve to the merged page. */}
           <Route path="tenant-settings" element={<PrivateRoute roles={['ADMIN']}><SettingsPage /></PrivateRoute>} />
-          <Route path="packages" element={<PackagesPage />} />
-          <Route path="bookings" element={<BookingsPage />} />
-          <Route path="bookings/:id" element={<BookingDetailPage />} />
+          <Route path="packages" element={<PrivateRoute perm="packages:view"><PackagesPage /></PrivateRoute>} />
+          <Route path="bookings" element={<PrivateRoute perm="bookings:view"><BookingsPage /></PrivateRoute>} />
+          <Route path="bookings/:id" element={<PrivateRoute perm="bookings:view"><BookingDetailPage /></PrivateRoute>} />
           <Route path="transport" element={<PrivateRoute roles={['ADMIN', 'AGENT']} perm="transport:view"><TransportPage /></PrivateRoute>} />
           <Route path="catering" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><CateringPage /></PrivateRoute>} />
           <Route path="hotels" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><HotelsPage /></PrivateRoute>} />
-          <Route path="vouchers" element={<VouchersPage />} />
+          <Route path="vouchers" element={<PrivateRoute perm="vouchers:view"><VouchersPage /></PrivateRoute>} />
           <Route path="voucher-forms" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><VoucherFormsPage /></PrivateRoute>} />
           <Route path="roles" element={<PrivateRoute roles={['ADMIN']}><RolesPage /></PrivateRoute>} />
           <Route path="payments" element={<PrivateRoute roles={['ADMIN', 'AGENT']}><PaymentsPage /></PrivateRoute>} />

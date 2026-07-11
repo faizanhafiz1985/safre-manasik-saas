@@ -20,6 +20,7 @@ router.delete('/trips/:id', authorize('ADMIN'), requirePermission('fleet_trips',
 // Cash accountability
 router.get('/cash', requirePermission('fleet_cash', 'view'), ctrl.listCash);
 router.post('/cash', requirePermission('fleet_cash', 'create'), ctrl.submitCash);
+router.delete('/cash/:id', authorize('ADMIN'), requirePermission('fleet_cash', 'delete'), ctrl.removeCash);
 
 // Maintenance / oil-change alerts
 router.get('/maintenance/alerts', requirePermission('fleet_maintenance', 'view'), ctrl.alerts);
