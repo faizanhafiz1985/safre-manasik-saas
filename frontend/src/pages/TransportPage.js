@@ -525,8 +525,8 @@ export default function TransportPage() {
 // ── Per-vehicle Cash Log + Maintenance panel ──────────────────────────────────
 function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
   const [tab, setTab] = useState(vehicle._tab === 'maint' ? 1 : 0);
-  const [cash, setCash] = useState({ data: [], totalAmount: 0 });
-  const [cashForm, setCashForm] = useState({ amount: '', logDate: new Date().toISOString().substring(0, 10), notes: '' });
+  const [cash, setCash] = useState({ data: [], totalAmount: 0, totalExpense: 0, totalNet: 0 });
+  const [cashForm, setCashForm] = useState({ amount: '', expense: '', logDate: new Date().toISOString().substring(0, 10), notes: '' });
   const [oil, setOil] = useState(null);
   const [history, setHistory] = useState([]);
   const [odo, setOdo] = useState('');
@@ -543,7 +543,8 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
 
   const submitCash = async () => {
     if (cashForm.amount === '' || Number(cashForm.amount) < 0) return toast.error('Enter a valid amount');
-    try { await api.post('/fleet/cash', { vehicleId: vehicle.id, ...cashForm }); toast.success('Cash submitted'); setCashForm({ amount: '', logDate: new Date().toISOString().substring(0, 10), notes: '' }); loadCash(); }
+    if (cashForm.expense !== '' && Number(cashForm.expense) < 0) return toast.error('Expense cannot be negative');
+    try { await api.post('/fleet/cash', { vehicleId: vehicle.id, ...cashForm }); toast.success('Cash submitted'); setCashForm({ amount: '', expense: '', logDate: new Date().toISOString().substring(0, 10), notes: '' }); loadCash(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
   const [maintFile, setMaintFile] = useState(null);
@@ -590,23 +591,27 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
           <>
             <Typography variant="subtitle2" gutterBottom>Submit Cash</Typography>
             <TextField fullWidth size="small" label="Amount" type="number" sx={{ mb: 1.5 }} value={cashForm.amount} onChange={(e) => setCashForm((f) => ({ ...f, amount: e.target.value }))} />
+            <TextField fullWidth size="small" label="Expense" type="number" sx={{ mb: 1.5 }} value={cashForm.expense} onChange={(e) => setCashForm((f) => ({ ...f, expense: e.target.value }))} />
+            <TextField fullWidth size="small" label="Net Total" sx={{ mb: 1.5 }} value={SAR((Number(cashForm.amount) || 0) - (Number(cashForm.expense) || 0))} InputProps={{ readOnly: true }} />
             <TextField fullWidth size="small" type="date" label="Date" sx={{ mb: 1.5 }} InputLabelProps={{ shrink: true }} value={cashForm.logDate} onChange={(e) => setCashForm((f) => ({ ...f, logDate: e.target.value }))} />
             <TextField fullWidth size="small" label="Notes" sx={{ mb: 1.5 }} value={cashForm.notes} onChange={(e) => setCashForm((f) => ({ ...f, notes: e.target.value }))} />
             <Button fullWidth variant="contained" startIcon={<AttachMoney />} onClick={submitCash}>Submit Cash</Button>
             <Divider sx={{ my: 2 }} />
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography variant="subtitle2">Recent</Typography>
-              <Typography variant="subtitle2" color="primary.main">Total: {SAR(cash.totalAmount)}</Typography>
+              <Typography variant="caption" color="primary.main">Amt {SAR(cash.totalAmount)} · Exp {SAR(cash.totalExpense)} · Net {SAR(cash.totalNet)}</Typography>
             </Box>
             <Table size="small">
-              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell></TableRow></TableHead>
+              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell></TableRow></TableHead>
               <TableBody>
                 {cash.data.map((c) => (
                   <TableRow key={c.id}><TableCell><Typography variant="caption">{new Date(c.submittedAt).toLocaleString()}</Typography></TableCell>
                     <TableCell><Typography variant="caption">{new Date(c.logDate).toLocaleDateString()}</Typography></TableCell>
-                    <TableCell align="right">{SAR(c.amount)}</TableCell></TableRow>
+                    <TableCell align="right">{SAR(c.amount)}</TableCell>
+                    <TableCell align="right">{SAR(c.expense)}</TableCell>
+                    <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell></TableRow>
                 ))}
-                {cash.data.length === 0 && <TableRow><TableCell colSpan={3} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
+                {cash.data.length === 0 && <TableRow><TableCell colSpan={5} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
               </TableBody>
             </Table>
           </>
