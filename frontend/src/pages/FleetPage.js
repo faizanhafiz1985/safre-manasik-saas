@@ -6,9 +6,10 @@ import {
 } from '@mui/material';
 import {
   PlayArrow, Stop, MyLocation, Add, Paid, Build, DirectionsCar, Route as RouteIcon,
-  Speed, Warning, CheckCircle, Delete, AttachMoney, LocalGasStation, Badge,
+  Speed, Warning, CheckCircle, Delete, AttachMoney, LocalGasStation, Badge, FileDownload,
 } from '@mui/icons-material';
 import api from '../services/api';
+import { exportToXlsx } from '../utils/exportXlsx';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
@@ -283,6 +284,20 @@ function CashTab({ vehicles }) {
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
   const del = async (c) => { if (!window.confirm('Delete this cash entry?')) return; try { await api.delete(`/fleet/cash/${c.id}`); toast.success('Deleted'); load(); } catch (e) { toast.error(e.response?.data?.error || 'Failed'); } };
+  const exportCash = () => {
+    if (!data.data.length) return toast.info('No cash entries to export');
+    const rows = data.data.map((c) => ({
+      Submitted: fmtDT(c.submittedAt),
+      'For Date': new Date(c.logDate).toLocaleDateString(),
+      Driver: c.driverName || '',
+      Vehicle: c.vehicle?.name || '',
+      Amount: Number(c.amount || 0),
+      Expense: Number(c.expense || 0),
+      'Net Total': Number(c.amount || 0) - Number(c.expense || 0),
+      Notes: c.notes || '',
+    }));
+    exportToXlsx(rows, `fleet-cash-${today()}.xlsx`, 'Cash Log');
+  };
   return (
     <Box>
       <Card sx={{ mb: 2 }}><CardContent>
@@ -301,11 +316,14 @@ function CashTab({ vehicles }) {
         </Stack>
       </CardContent></Card>
       <Card>
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Typography variant="subtitle2">Recent Cash Submissions</Typography>
-          <Typography variant="subtitle2" color="primary.main">
-            Amount: {SAR(data.totalAmount)} · Expense: {SAR(data.totalExpense)} · Net: {SAR(data.totalNet)}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="subtitle2" color="primary.main">
+              Amount: {SAR(data.totalAmount)} · Expense: {SAR(data.totalExpense)} · Net: {SAR(data.totalNet)}
+            </Typography>
+            <Button size="small" startIcon={<FileDownload />} onClick={exportCash} disabled={!data.data.length}>Export</Button>
+          </Box>
         </Box>
         <Divider />
         <Box sx={{ overflowX: 'auto' }}>

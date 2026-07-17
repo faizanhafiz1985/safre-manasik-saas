@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Card, CardContent, Grid, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Tabs, Tab, Chip, IconButton, Tooltip, Drawer, Divider, Autocomplete } from '@mui/material';
-import { Add, DirectionsBus, Route, Delete, AttachMoney, Build } from '@mui/icons-material';
+import { Add, DirectionsBus, Route, Delete, AttachMoney, Build, FileDownload } from '@mui/icons-material';
 import api from '../services/api';
 import BulkImport from '../components/BulkImport';
+import { exportToXlsx } from '../utils/exportXlsx';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useForm, Controller } from 'react-hook-form';
@@ -549,6 +550,18 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
   const delCash = async (c) => { if (!window.confirm('Delete this cash entry?')) return; try { await api.delete(`/fleet/cash/${c.id}`); toast.success('Deleted'); loadCash(); } catch (e) { toast.error(e.response?.data?.error || 'Failed'); } };
+  const exportCash = () => {
+    if (!cash.data.length) return toast.info('No cash entries to export');
+    const rows = cash.data.map((c) => ({
+      Submitted: new Date(c.submittedAt).toLocaleString(),
+      'For Date': new Date(c.logDate).toLocaleDateString(),
+      Amount: Number(c.amount || 0),
+      Expense: Number(c.expense || 0),
+      'Net Total': Number(c.amount || 0) - Number(c.expense || 0),
+      Notes: c.notes || '',
+    }));
+    exportToXlsx(rows, `cash-${(vehicle.plateNumber || vehicle.name || 'vehicle').replace(/\s+/g, '_')}.xlsx`, 'Cash Log');
+  };
   const [maintFile, setMaintFile] = useState(null);
   const confirmOil = async (completed) => {
     try {
@@ -599,9 +612,12 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
             <TextField fullWidth size="small" label="Notes" sx={{ mb: 1.5 }} value={cashForm.notes} onChange={(e) => setCashForm((f) => ({ ...f, notes: e.target.value }))} />
             <Button fullWidth variant="contained" startIcon={<AttachMoney />} onClick={submitCash}>Submit Cash</Button>
             <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
               <Typography variant="subtitle2">Recent</Typography>
-              <Typography variant="caption" color="primary.main">Amt {SAR(cash.totalAmount)} · Exp {SAR(cash.totalExpense)} · Net {SAR(cash.totalNet)}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" color="primary.main">Amt {SAR(cash.totalAmount)} · Exp {SAR(cash.totalExpense)} · Net {SAR(cash.totalNet)}</Typography>
+                <Button size="small" startIcon={<FileDownload />} onClick={exportCash} disabled={!cash.data.length}>Export</Button>
+              </Box>
             </Box>
             <Table size="small">
               <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell><TableCell>Notes</TableCell>{isAdmin && <TableCell align="right"></TableCell>}</TableRow></TableHead>
