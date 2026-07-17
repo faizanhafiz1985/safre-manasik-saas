@@ -604,7 +604,7 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
               <Typography variant="caption" color="primary.main">Amt {SAR(cash.totalAmount)} · Exp {SAR(cash.totalExpense)} · Net {SAR(cash.totalNet)}</Typography>
             </Box>
             <Table size="small">
-              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell>{isAdmin && <TableCell align="right"></TableCell>}</TableRow></TableHead>
+              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell><TableCell>Notes</TableCell>{isAdmin && <TableCell align="right"></TableCell>}</TableRow></TableHead>
               <TableBody>
                 {cash.data.map((c) => (
                   <TableRow key={c.id}><TableCell><Typography variant="caption">{new Date(c.submittedAt).toLocaleString()}</Typography></TableCell>
@@ -612,9 +612,10 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
                     <TableCell align="right">{SAR(c.amount)}</TableCell>
                     <TableCell align="right">{SAR(c.expense)}</TableCell>
                     <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell>
+                    <TableCell><Typography variant="caption">{c.notes || ''}</Typography></TableCell>
                     {isAdmin && <TableCell align="right"><Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => delCash(c)}><Delete fontSize="small" /></IconButton></Tooltip></TableCell>}</TableRow>
                 ))}
-                {cash.data.length === 0 && <TableRow><TableCell colSpan={isAdmin ? 6 : 5} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
+                {cash.data.length === 0 && <TableRow><TableCell colSpan={isAdmin ? 7 : 6} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
               </TableBody>
             </Table>
           </>
