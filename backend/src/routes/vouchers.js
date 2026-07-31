@@ -49,5 +49,7 @@ const { requirePermission } = require('../middleware/permission');
 router.use(authenticate, tenantScope, requireTenant);
 router.get('/', requirePermission('vouchers', 'view'), ctrl.getVouchers);
 router.post('/generate', authorize('ADMIN', 'AGENT'), requirePermission('vouchers', 'create'), requireFeature('pdfVouchers'), ctrl.generateVoucher);
+// Tentative vouchers only — enforced in the controller.
+router.delete('/:id', authorize('ADMIN'), requirePermission('vouchers', 'delete'), ctrl.removeVoucher);
 
 module.exports = router;

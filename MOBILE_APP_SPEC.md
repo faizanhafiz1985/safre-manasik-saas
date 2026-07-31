@@ -176,6 +176,7 @@ as the web app does (show a tab only if `permissions` contains `"<feature>:view"
 | POST | `/vouchers/generate` | B ADMIN/AGENT `vouchers:create` + plan `pdfVouchers` | create a TENTATIVE/CONFIRMED voucher record |
 | GET | `/vouchers/preview/:bookingId` | B (flexAuth; accepts `?token=`) | **HTML** voucher (render in WebView). `?type=CONFIRMED\|TENTATIVE` |
 | GET | `/vouchers/download/:id` | B + plan `pdfVouchers` | **PDF** download (falls back to HTML) |
+| DELETE | `/vouchers/:id` | B ADMIN `vouchers:delete` | delete a **TENTATIVE** voucher (409 on CONFIRMED — final documents). The booking is untouched. |
 
 ### 6.5 Direct Vouchers (standalone hotel/transport vouchers + invoices)
 | Method | Path | Auth | Purpose |

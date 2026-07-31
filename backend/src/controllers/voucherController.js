@@ -144,4 +144,25 @@ const previewVoucher = async (req, res, next) => {
   }
 };
 
-module.exports = { getVouchers, generateVoucher, downloadVoucher, previewVoucher };
+// ── Delete — TENTATIVE vouchers only (admin) ─────────────────────────────────
+// A confirmed voucher is a final document issued to the pilgrim and stays
+// immutable; tentative ones may be discarded (e.g. re-issue after edits).
+// Deleting a voucher never touches its booking.
+const removeVoucher = async (req, res, next) => {
+  try {
+    const v = await prisma.voucher.findFirst({
+      where: { id: req.params.id },
+      select: { id: true, type: true, voucherNo: true },
+    });
+    if (!v) return res.status(404).json({ error: 'Voucher not found' });
+    if (v.type !== 'TENTATIVE') {
+      return res.status(409).json({ error: 'Only tentative vouchers can be deleted. Confirmed vouchers are final documents.' });
+    }
+    await prisma.voucher.deleteMany({ where: { id: v.id } });
+    res.json({ message: `Voucher ${v.voucherNo || ''} deleted`.replace('  ', ' ').trim() });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getVouchers, generateVoucher, downloadVoucher, previewVoucher, removeVoucher };

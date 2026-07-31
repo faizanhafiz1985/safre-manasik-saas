@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Card, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, TextField } from '@mui/material';
-import { ConfirmationNumber, Download, Visibility, Add } from '@mui/icons-material';
+import { Box, Typography, Card, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, TextField, Tooltip, IconButton } from '@mui/material';
+import { ConfirmationNumber, Download, Visibility, Add, Delete } from '@mui/icons-material';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import { fmtDate } from '../utils/helpers';
@@ -81,6 +81,18 @@ export default function VouchersPage() {
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to generate voucher');
+    }
+  };
+
+  // Admin-only. Confirmed vouchers are final documents — the server rejects them.
+  const onDelete = async (v) => {
+    if (!window.confirm(`Delete tentative voucher ${v.voucherNo || ''}?\n\nThis removes the voucher record only — the booking ${v.booking?.bookingRef || ''} is not affected.`)) return;
+    try {
+      await api.delete(`/vouchers/${v.id}`);
+      toast.success(`Voucher ${v.voucherNo || ''} deleted`);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete voucher');
     }
   };
 
@@ -180,6 +192,13 @@ export default function VouchersPage() {
                         >
                           PDF
                         </Button>
+                        {isAdmin && v.type === 'TENTATIVE' && (
+                          <Tooltip title="Delete tentative voucher">
+                            <IconButton size="small" color="error" onClick={() => onDelete(v)}>
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>
