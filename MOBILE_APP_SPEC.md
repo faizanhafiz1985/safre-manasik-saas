@@ -167,7 +167,7 @@ as the web app does (show a tab only if `permissions` contains `"<feature>:view"
 | POST | `/bookings/:id/passengers` | B ADMIN/AGENT `bookings:edit` | add passengers |
 | POST | `/bookings/:id/transport` | B ADMIN/AGENT `bookings:edit` | assign vehicle/route |
 | POST | `/bookings/:id/catering` | B ADMIN/AGENT `bookings:edit` | assign meal plan |
-| DELETE | `/bookings/:id` | B ADMIN `bookings:delete` | delete |
+| DELETE | `/bookings/:id` | B ADMIN `bookings:delete` | **soft cancel** (sets status CANCELLED, row kept). `?hard=1` → permanent purge incl. payments/invoice/vouchers/passengers (test-data cleanup) |
 
 ### 6.4 Vouchers (booking‑based)
 | Method | Path | Auth | Purpose |

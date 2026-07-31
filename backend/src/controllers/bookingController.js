@@ -324,6 +324,23 @@ const assignCatering = async (req, res, next) => {
 
 const remove = async (req, res, next) => {
   try {
+    // ?hard=1 → permanent removal (ADMIN-gated on the route). Used to purge
+    // test/QA data; the default remains a soft cancel so real bookings keep
+    // their audit history. Children are deleted explicitly so this does not
+    // depend on DB-level cascade settings.
+    if (String(req.query.hard) === '1') {
+      const b = await prisma.booking.findFirst({ where: { id: req.params.id }, select: { id: true, bookingRef: true } });
+      if (!b) return res.status(404).json({ error: 'Booking not found' });
+      await prisma.payment.deleteMany({ where: { bookingId: b.id } });
+      await prisma.invoice.deleteMany({ where: { bookingId: b.id } });
+      await prisma.voucher.deleteMany({ where: { bookingId: b.id } });
+      await prisma.passenger.deleteMany({ where: { bookingId: b.id } });
+      await prisma.bookingTransport.deleteMany({ where: { bookingId: b.id } });
+      await prisma.bookingCatering.deleteMany({ where: { bookingId: b.id } });
+      const result = await prisma.booking.deleteMany({ where: { id: b.id } });
+      if (result.count === 0) return res.status(404).json({ error: 'Booking not found' });
+      return res.json({ message: `Booking ${b.bookingRef} permanently deleted` });
+    }
     const result = await prisma.booking.updateMany({
       where: { id: req.params.id }, data: { status: 'CANCELLED' },
     });
