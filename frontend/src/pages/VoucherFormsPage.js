@@ -345,7 +345,16 @@ export default function VoucherFormsPage() {
             <ToggleButton value="TRANSPORT" sx={{ px: 3 }}><DirectionsBus fontSize="small" sx={{ mr: 1 }} /> Transport Voucher</ToggleButton>
           </ToggleButtonGroup>
 
-          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: '#1B4B35' }}>Customer</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ color: '#1B4B35' }}>Customer</Typography>
+            {!editingId && !form.customerId && (form.firstName || form.mobile)
+              ? <Chip size="small" color="success" variant="outlined" label="New customer — will be added to Customers" />
+              : (form.customerId ? <Chip size="small" color="primary" variant="outlined" label="Existing customer selected" /> : null)}
+          </Box>
+          <Alert severity="info" sx={{ mb: 1.5, py: 0.25 }}>
+            <strong>Adding a new customer?</strong> Just fill in the details below and save — they’re added to the
+            Customers tab automatically. Or search for an <strong>existing</strong> customer to prefill.
+          </Alert>
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <Autocomplete
@@ -356,8 +365,8 @@ export default function VoucherFormsPage() {
                 getOptionLabel={(c) => `${c.name}${c.phone ? ` — ${c.phone}` : ''}${c.companyName ? ` (${c.companyName})` : ''}`}
                 isOptionEqualToValue={(o, v) => o.id === v.id}
                 renderInput={(params) => (
-                  <TextField {...params} label="Existing customer (optional)"
-                    helperText="Pick to prefill — or type the details below; new customers are saved to the Customers tab automatically" />
+                  <TextField {...params} label="Search existing customer (optional)"
+                    helperText="Leave blank and fill the fields below to create a new customer" />
                 )}
               />
             </Grid>
