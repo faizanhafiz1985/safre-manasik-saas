@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Card, CardContent, Grid, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Tabs, Tab, Chip, IconButton, Tooltip, Drawer, Divider, Autocomplete } from '@mui/material';
-import { Add, DirectionsBus, Route, Delete, AttachMoney, Build, FileDownload } from '@mui/icons-material';
+import { Add, DirectionsBus, Route, Delete, AttachMoney, Build, FileDownload, Receipt } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import BulkImport from '../components/BulkImport';
 import { exportToXlsx } from '../utils/exportXlsx';
@@ -27,7 +28,11 @@ import { PATTERNS, MESSAGES, alphaOnly, numericOnly } from '../utils/validation'
 const PHONE_SA = /^966[0-9]{9}$/;
 
 export default function TransportPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  const navigate = useNavigate();
+  // Only surface "Voucher Log" to users who can actually create direct vouchers,
+  // so it never leads to a permission redirect.
+  const canVoucher = isAdmin || new Set(user?.permissions || []).has('voucher_forms:create');
   const [tab, setTab] = useState(0);
   const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
@@ -252,6 +257,12 @@ export default function TransportPage() {
                       <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
                         <Button size="small" variant="contained" startIcon={<Route />} onClick={() => { setTripVehicle(v); setTripForm(EMPTY_TRIP); }}>Add Trip</Button>
                         <Button size="small" variant="outlined" startIcon={<AttachMoney />} onClick={() => setFleetVehicle({ ...v, _tab: 'cash' })}>Cash Log</Button>
+                        {canVoucher && (
+                          <Button size="small" variant="outlined" startIcon={<Receipt />}
+                            onClick={() => navigate('/voucher-forms', { state: { openNewVoucher: true, vehicleType: v.type || '' } })}>
+                            Voucher Log
+                          </Button>
+                        )}
                         <Button size="small" variant="outlined" startIcon={<Build />} onClick={() => setFleetVehicle({ ...v, _tab: 'maint' })}>Maintenance</Button>
                       </Box>
                       {isAdmin && (

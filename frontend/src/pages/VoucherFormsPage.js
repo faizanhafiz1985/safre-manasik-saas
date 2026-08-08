@@ -10,6 +10,7 @@ import {
   Add, Search, Receipt, Delete, CheckCircle, Hotel as HotelIcon, DirectionsBus,
   RestartAlt, Edit, Block, Description, RequestQuote, Paid,
 } from '@mui/icons-material';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import BulkImport from '../components/BulkImport';
 import { toast } from 'react-toastify';
@@ -37,6 +38,8 @@ function nights(ci, co) {
 const dateOnly = (d) => (d ? String(d).split('T')[0] : '');
 
 export default function VoucherFormsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -98,8 +101,17 @@ export default function VoucherFormsPage() {
     }));
   };
 
-  const openNew = async () => {
-    setEditingId(null); setForm(EMPTY); setErrs({}); setVoucherNo('…'); setOpen(true);
+  // `prefill` (optional) lets callers (e.g. the Transport "Voucher Log" button)
+  // open the form pre-set to a Transport voucher with a vehicle type. With no
+  // prefill it behaves exactly as before (blank Hotel voucher).
+  const openNew = async (prefill) => {
+    setEditingId(null);
+    if (prefill && prefill.type === 'TRANSPORT') {
+      setForm({ ...EMPTY, type: 'TRANSPORT', trips: [{ ...EMPTY_TRANSPORT_TRIP, ...(prefill.vehicleType ? { vehicleType: prefill.vehicleType } : {}) }] });
+    } else {
+      setForm(EMPTY);
+    }
+    setErrs({}); setVoucherNo('…'); setOpen(true);
     try {
       const n = await api.get('/voucher-forms/next-number');
       setVoucherNo(n.data.voucherNo);
@@ -107,6 +119,17 @@ export default function VoucherFormsPage() {
     fetchHotels();
     fetchCustomers();
   };
+
+  // Auto-open the New Voucher form when arriving from the Transport "Voucher Log"
+  // button (which passes router state). Clear the state so refresh/back doesn't
+  // re-open it.
+  useEffect(() => {
+    if (location.state && location.state.openNewVoucher) {
+      openNew({ type: 'TRANSPORT', vehicleType: location.state.vehicleType || '' });
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line
+  }, [location.state]);
 
   const openEdit = async (v) => {
     setErrs({}); setOpen(true); setVoucherNo(v.voucherNo); setEditingId(v.id);
