@@ -573,6 +573,8 @@ async function ensureFleetTables() {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_fc_tenant_date ON fleet_cash_logs("tenantId","logDate")`);
     // Expense column on cash logs (net total = amount - expense). Idempotent.
     await prisma.$executeRawUnsafe(`ALTER TABLE fleet_cash_logs ADD COLUMN IF NOT EXISTS "expense" DECIMAL(10,2) NOT NULL DEFAULT 0`);
+    // Configurable payment type on cash logs (Cash / Voucher / ...). Idempotent.
+    await prisma.$executeRawUnsafe(`ALTER TABLE fleet_cash_logs ADD COLUMN IF NOT EXISTS "paymentType" VARCHAR(40) NOT NULL DEFAULT 'Cash'`);
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS fleet_maintenance (

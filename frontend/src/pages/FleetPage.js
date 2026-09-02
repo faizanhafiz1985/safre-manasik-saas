@@ -274,13 +274,24 @@ function CashTab({ vehicles }) {
   const { user } = useAuth();
   const canDelete = user?.role === 'ADMIN'; // delete route is ADMIN-only
   const [data, setData] = useState({ data: [], totalAmount: 0, totalExpense: 0, totalNet: 0 });
-  const [form, setForm] = useState({ vehicleId: '', amount: '', expense: '', logDate: today(), notes: '' });
+  const [payTypes, setPayTypes] = useState(['Cash', 'Voucher']);
+  const [form, setForm] = useState({ vehicleId: '', amount: '', expense: '', paymentType: 'Cash', logDate: today(), notes: '' });
   const load = useCallback(() => { api.get('/fleet/cash').then((r) => setData(r.data)).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
+  // Configurable payment types from System Config → Fleet (falls back to Cash/Voucher).
+  useEffect(() => {
+    api.get('/config').then((r) => {
+      const raw = (r.data?.cash_payment_types || '').trim();
+      const list = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const types = list.length ? Array.from(new Set(list)) : ['Cash', 'Voucher'];
+      setPayTypes(types);
+      setForm((f) => ({ ...f, paymentType: types.includes(f.paymentType) ? f.paymentType : types[0] }));
+    }).catch(() => {});
+  }, []);
   const submit = async () => {
     if (form.amount === '' || Number(form.amount) < 0) return toast.error('Enter a valid amount');
     if (form.expense !== '' && Number(form.expense) < 0) return toast.error('Expense cannot be negative');
-    try { await api.post('/fleet/cash', form); toast.success('Cash submitted'); setForm({ vehicleId: '', amount: '', expense: '', logDate: today(), notes: '' }); load(); }
+    try { await api.post('/fleet/cash', form); toast.success('Cash submitted'); setForm({ vehicleId: '', amount: '', expense: '', paymentType: payTypes[0] || 'Cash', logDate: today(), notes: '' }); load(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
   const del = async (c) => { if (!window.confirm('Delete this cash entry?')) return; try { await api.delete(`/fleet/cash/${c.id}`); toast.success('Deleted'); load(); } catch (e) { toast.error(e.response?.data?.error || 'Failed'); } };
@@ -294,6 +305,7 @@ function CashTab({ vehicles }) {
       Amount: Number(c.amount || 0),
       Expense: Number(c.expense || 0),
       'Net Total': Number(c.amount || 0) - Number(c.expense || 0),
+      'Payment Type': c.paymentType || 'Cash',
       Notes: c.notes || '',
     }));
     exportToXlsx(rows, `fleet-cash-${today()}.xlsx`, 'Cash Log');
@@ -306,6 +318,9 @@ function CashTab({ vehicles }) {
           <TextField select size="small" label="Vehicle" value={form.vehicleId} onChange={(e) => setForm((f) => ({ ...f, vehicleId: e.target.value }))} sx={{ minWidth: 180 }}>
             <MenuItem value="">— none —</MenuItem>
             {vehicles.map((v) => <MenuItem key={v.id} value={v.id}>{v.name}</MenuItem>)}
+          </TextField>
+          <TextField select size="small" label="Payment Type" value={form.paymentType} onChange={(e) => setForm((f) => ({ ...f, paymentType: e.target.value }))} sx={{ minWidth: 140 }}>
+            {payTypes.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
           </TextField>
           <TextField size="small" label="Amount" type="number" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
           <TextField size="small" label="Expense" type="number" value={form.expense} onChange={(e) => setForm((f) => ({ ...f, expense: e.target.value }))} />
@@ -331,7 +346,8 @@ function CashTab({ vehicles }) {
             <TableHead><TableRow sx={{ bgcolor: '#F3F8F5' }}>
               <TableCell><strong>Submitted</strong></TableCell><TableCell><strong>For Date</strong></TableCell><TableCell><strong>Driver</strong></TableCell>
               <TableCell><strong>Vehicle</strong></TableCell><TableCell align="right"><strong>Amount</strong></TableCell>
-              <TableCell align="right"><strong>Expense</strong></TableCell><TableCell align="right"><strong>Net Total</strong></TableCell><TableCell><strong>Notes</strong></TableCell>
+              <TableCell align="right"><strong>Expense</strong></TableCell><TableCell align="right"><strong>Net Total</strong></TableCell>
+              <TableCell><strong>Payment Type</strong></TableCell><TableCell><strong>Notes</strong></TableCell>
               {canDelete && <TableCell align="right"></TableCell>}
             </TableRow></TableHead>
             <TableBody>
@@ -344,11 +360,12 @@ function CashTab({ vehicles }) {
                   <TableCell align="right">{SAR(c.amount)}</TableCell>
                   <TableCell align="right">{SAR(c.expense)}</TableCell>
                   <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell>
+                  <TableCell><Chip size="small" variant="outlined" label={c.paymentType || 'Cash'} /></TableCell>
                   <TableCell><Typography variant="caption">{c.notes || ''}</Typography></TableCell>
                   {canDelete && <TableCell align="right"><Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => del(c)}><Delete fontSize="small" /></IconButton></Tooltip></TableCell>}
                 </TableRow>
               ))}
-              {data.data.length === 0 && <TableRow><TableCell colSpan={canDelete ? 9 : 8} align="center" sx={{ py: 4, color: 'text.secondary' }}>No cash submissions yet.</TableCell></TableRow>}
+              {data.data.length === 0 && <TableRow><TableCell colSpan={canDelete ? 10 : 9} align="center" sx={{ py: 4, color: 'text.secondary' }}>No cash submissions yet.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </Box>

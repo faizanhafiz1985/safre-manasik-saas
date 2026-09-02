@@ -241,7 +241,7 @@ const removeCash = async (req, res, next) => {
 // ── Cash accountability ─────────────────────────────────────────────────────
 const submitCash = async (req, res, next) => {
   try {
-    const { vehicleId, tripId, amount, expense, currency, logDate, notes } = req.body;
+    const { vehicleId, tripId, amount, expense, currency, logDate, notes, paymentType } = req.body;
     if (amount === undefined || isNaN(Number(amount)) || Number(amount) < 0) return res.status(400).json({ error: 'A valid cash amount is required' });
     if (expense !== undefined && expense !== '' && (isNaN(Number(expense)) || Number(expense) < 0)) return res.status(400).json({ error: 'Expense must be a valid non-negative number' });
     if (vehicleId && !(await vehicleAllowed(req, vehicleId))) return res.status(403).json({ error: 'This vehicle is not assigned to you.' });
@@ -250,6 +250,7 @@ const submitCash = async (req, res, next) => {
         tenantId: getTenantId(), vehicleId: vehicleId || null, tripId: tripId || null,
         driverId: req.user.id, driverName: req.user.name,
         amount: Number(amount), expense: num(expense) || 0, currency: (currency || 'SAR').toUpperCase().slice(0, 8),
+        paymentType: (paymentType && String(paymentType).trim().slice(0, 40)) || 'Cash',
         logDate: logDate ? new Date(logDate) : new Date(), submittedAt: new Date(),
         notes: notes || null, createdById: req.user.id,
       },

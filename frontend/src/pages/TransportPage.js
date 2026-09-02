@@ -539,7 +539,8 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
   const { isAdmin } = useAuth(); // cash delete route is ADMIN-only
   const [tab, setTab] = useState(vehicle._tab === 'maint' ? 1 : 0);
   const [cash, setCash] = useState({ data: [], totalAmount: 0, totalExpense: 0, totalNet: 0 });
-  const [cashForm, setCashForm] = useState({ amount: '', expense: '', logDate: new Date().toISOString().substring(0, 10), notes: '' });
+  const [payTypes, setPayTypes] = useState(['Cash', 'Voucher']);
+  const [cashForm, setCashForm] = useState({ amount: '', expense: '', paymentType: 'Cash', logDate: new Date().toISOString().substring(0, 10), notes: '' });
   const [oil, setOil] = useState(null);
   const [history, setHistory] = useState([]);
   const [odo, setOdo] = useState('');
@@ -553,11 +554,21 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
     api.get('/fleet/maintenance', { params: { vehicleId: vehicle.id } }).then((r) => setHistory(r.data.data || [])).catch(() => {});
   };
   useEffect(() => { loadCash(); loadMaint(); setOdo(String(vehicle.currentOdometer || '')); /* eslint-disable-next-line */ }, [vehicle.id]);
+  // Configurable payment types from System Config → Fleet (falls back to Cash/Voucher).
+  useEffect(() => {
+    api.get('/config').then((r) => {
+      const raw = (r.data?.cash_payment_types || '').trim();
+      const list = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const types = list.length ? Array.from(new Set(list)) : ['Cash', 'Voucher'];
+      setPayTypes(types);
+      setCashForm((f) => ({ ...f, paymentType: types.includes(f.paymentType) ? f.paymentType : types[0] }));
+    }).catch(() => {});
+  }, []);
 
   const submitCash = async () => {
     if (cashForm.amount === '' || Number(cashForm.amount) < 0) return toast.error('Enter a valid amount');
     if (cashForm.expense !== '' && Number(cashForm.expense) < 0) return toast.error('Expense cannot be negative');
-    try { await api.post('/fleet/cash', { vehicleId: vehicle.id, ...cashForm }); toast.success('Cash submitted'); setCashForm({ amount: '', expense: '', logDate: new Date().toISOString().substring(0, 10), notes: '' }); loadCash(); }
+    try { await api.post('/fleet/cash', { vehicleId: vehicle.id, ...cashForm }); toast.success('Cash submitted'); setCashForm({ amount: '', expense: '', paymentType: payTypes[0] || 'Cash', logDate: new Date().toISOString().substring(0, 10), notes: '' }); loadCash(); }
     catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
   const delCash = async (c) => { if (!window.confirm('Delete this cash entry?')) return; try { await api.delete(`/fleet/cash/${c.id}`); toast.success('Deleted'); loadCash(); } catch (e) { toast.error(e.response?.data?.error || 'Failed'); } };
@@ -569,6 +580,7 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
       Amount: Number(c.amount || 0),
       Expense: Number(c.expense || 0),
       'Net Total': Number(c.amount || 0) - Number(c.expense || 0),
+      'Payment Type': c.paymentType || 'Cash',
       Notes: c.notes || '',
     }));
     exportToXlsx(rows, `cash-${(vehicle.plateNumber || vehicle.name || 'vehicle').replace(/\s+/g, '_')}.xlsx`, 'Cash Log');
@@ -616,6 +628,9 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
         {tab === 0 && (
           <>
             <Typography variant="subtitle2" gutterBottom>Submit Cash</Typography>
+            <TextField select fullWidth size="small" label="Payment Type" sx={{ mb: 1.5 }} value={cashForm.paymentType} onChange={(e) => setCashForm((f) => ({ ...f, paymentType: e.target.value }))}>
+              {payTypes.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+            </TextField>
             <TextField fullWidth size="small" label="Amount" type="number" sx={{ mb: 1.5 }} value={cashForm.amount} onChange={(e) => setCashForm((f) => ({ ...f, amount: e.target.value }))} />
             <TextField fullWidth size="small" label="Expense" type="number" sx={{ mb: 1.5 }} value={cashForm.expense} onChange={(e) => setCashForm((f) => ({ ...f, expense: e.target.value }))} />
             <TextField fullWidth size="small" label="Net Total" sx={{ mb: 1.5 }} value={SAR((Number(cashForm.amount) || 0) - (Number(cashForm.expense) || 0))} InputProps={{ readOnly: true }} />
@@ -631,7 +646,7 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
               </Box>
             </Box>
             <Table size="small">
-              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell><TableCell>Notes</TableCell>{isAdmin && <TableCell align="right"></TableCell>}</TableRow></TableHead>
+              <TableHead><TableRow><TableCell>Submitted</TableCell><TableCell>For</TableCell><TableCell align="right">Amount</TableCell><TableCell align="right">Expense</TableCell><TableCell align="right">Net Total</TableCell><TableCell>Payment</TableCell><TableCell>Notes</TableCell>{isAdmin && <TableCell align="right"></TableCell>}</TableRow></TableHead>
               <TableBody>
                 {cash.data.map((c) => (
                   <TableRow key={c.id}><TableCell><Typography variant="caption">{new Date(c.submittedAt).toLocaleString()}</Typography></TableCell>
@@ -639,10 +654,11 @@ function VehicleFleetDrawer({ vehicle, onClose, onChanged }) {
                     <TableCell align="right">{SAR(c.amount)}</TableCell>
                     <TableCell align="right">{SAR(c.expense)}</TableCell>
                     <TableCell align="right"><strong>{SAR(Number(c.amount || 0) - Number(c.expense || 0))}</strong></TableCell>
+                    <TableCell><Chip size="small" variant="outlined" label={c.paymentType || 'Cash'} /></TableCell>
                     <TableCell><Typography variant="caption">{c.notes || ''}</Typography></TableCell>
                     {isAdmin && <TableCell align="right"><Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => delCash(c)}><Delete fontSize="small" /></IconButton></Tooltip></TableCell>}</TableRow>
                 ))}
-                {cash.data.length === 0 && <TableRow><TableCell colSpan={isAdmin ? 7 : 6} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
+                {cash.data.length === 0 && <TableRow><TableCell colSpan={isAdmin ? 8 : 7} align="center" sx={{ color: 'text.secondary', py: 2 }}>No cash logged.</TableCell></TableRow>}
               </TableBody>
             </Table>
           </>

@@ -18,6 +18,7 @@ const CONFIG_FIELDS = [
   { key: 'terms_transport_voucher', label: 'Transport Voucher — Terms & Conditions (printed on transport vouchers)', section: 'Vouchers', multiline: true, wide: true, rows: 3 },
   { key: 'terms_invoice', label: 'Invoice — Terms & Conditions (printed on proforma & tax invoices)', section: 'Vouchers', multiline: true, wide: true, rows: 3 },
   { key: 'vehicle_types', label: 'Vehicle Types (comma-separated, e.g. BUS, CAR, VIP, SUV, VAN, COASTER)', section: 'Fleet', multiline: true, wide: true, rows: 2 },
+  { key: 'cash_payment_types', label: 'Cash Log — Payment Types (comma-separated, e.g. Cash, Voucher)', section: 'Fleet', multiline: true, wide: true, rows: 2 },
 ];
 
 export default function AdminConfigPage() {

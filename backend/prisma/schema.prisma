@@ -666,6 +666,7 @@ model FleetCashLog {
   tripId      String?
   amount      Decimal  @default(0) @db.Decimal(10, 2)
   expense     Decimal  @default(0) @db.Decimal(10, 2) // deductions; net = amount - expense
+  paymentType String   @default("Cash") // configurable (cash_payment_types): Cash / Voucher / ...
   currency    String   @default("SAR")
   logDate     DateTime // the day the cash is for
   submittedAt DateTime @default(now()) // server timestamp of submission
